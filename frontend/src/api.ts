@@ -1,0 +1,116 @@
+export type Risk = "negligible" | "low" | "elevated" | "critical";
+
+export interface Operator { id: string; name: string; short: string; color: string }
+export interface Asset {
+  id: string; operator_id: string; name: string; type: string;
+  x: number; y: number; value_meur: number; height_m?: number;
+}
+export interface LanderPreset {
+  id: string; label: string; thrust_kn: number; hover_s: number; dispersion_m: number; note: string;
+  max_range_m: number;
+}
+export interface LanderParams { label: string; thrust_kn: number; hover_s: number; dispersion_m: number }
+export interface Pt { x: number; y: number }
+
+export interface AssetType {
+  key: string; label: string; default_height_m: number;
+  erosion_50: number; impact_50: number; coating_50: number | null;
+}
+export interface Meta {
+  terrain: { size_m: number; res_m: number; x_min: number; x_max: number; y_min: number; y_max: number; label: string };
+  landers: LanderPreset[];
+  asset_types: AssetType[];
+}
+
+export interface AssetResult {
+  asset_id: string; distance_m: number; shielded: boolean; damage_fraction: number;
+  mechanisms: { erosion: number; impact: number; coating: number };
+  expected_loss_meur: number; risk: Risk; energy_fluence_j_m2: number; dust_mass_g_m2: number;
+}
+export interface Assessment {
+  site: Pt & { elevation_m: number; slope_deg: number };
+  assets: AssetResult[];
+  summary: { expected_loss_meur: number; worst_asset_id: string | null; worst_risk: Risk; assets_at_risk: number };
+  compute_ms: number;
+}
+export interface Footprint {
+  n: number; radius_m: number; x_min: number; x_max: number; y_min: number; y_max: number;
+  values: number[]; reference: string; compute_ms: number;
+}
+export interface Alternative {
+  x: number; y: number; expected_loss_meur: number; traverse_meur: number; total_cost_meur: number;
+  distance_from_target_m: number; slope_deg: number;
+}
+export interface Optimization {
+  target: Assessment; best: Assessment | null; best_traverse_meur: number | null; alternatives: Alternative[];
+  search: { candidates: number; feasible: number; radius_m: number; step_m: number; points: [number, number, number | null][] };
+  compute_ms: number;
+}
+export interface Brief { markdown: string; source: "claude" | "template"; model?: string; reason?: string; latency_ms: number }
+export interface Plan {
+  id: string; operator_id: string; name: string; window: string; lander: LanderParams; site: Pt;
+  summary: Assessment["summary"]; status: string; created_at: number;
+}
+export interface Notice {
+  id: string; plan_id: string; from_operator_id: string; to_operator_id: string; asset_ids: string[];
+  max_risk: Risk; expected_loss_meur: number; subject: string; body: string;
+  status: "unread" | "acknowledged" | "objection"; reply?: string; created_at: number;
+}
+export interface Curves {
+  distance_m: number[];
+  series: { lander: string; label: string; eroded_mass_kg: number; damage: Record<string, number[]> }[];
+  surveyor_check: { distance_m: number; energy_fluence_j_m2: number; fine_mass_g_m2: number };
+}
+
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = JSON.stringify((await res.json()).detail); } catch { /* keep status text */ }
+    throw new Error(`${res.status} ${detail}`);
+  }
+  return res.json() as Promise<T>;
+}
+const post = <T,>(path: string, body: unknown) => req<T>(path, { method: "POST", body: JSON.stringify(body) });
+
+export const api = {
+  meta: () => req<Meta>("/api/meta"),
+  operators: () => req<Operator[]>("/api/operators"),
+  assets: () => req<Asset[]>("/api/assets"),
+  addAsset: (a: Omit<Asset, "id">) => post<Asset>("/api/assets", a),
+  deleteAsset: (id: string) => req<{ ok: boolean }>(`/api/assets/${id}`, { method: "DELETE" }),
+  assess: (lander: LanderParams, site: Pt) => post<Assessment>("/api/assess", { lander, site }),
+  footprint: (lander: LanderParams, site: Pt) => post<Footprint>("/api/footprint", { lander, site }),
+  optimize: (lander: LanderParams, site: Pt, opts: Record<string, number>) =>
+    post<Optimization>("/api/optimize", { lander, site, ...opts }),
+  brief: (lander: LanderParams, site: Pt, optimized_site: Pt | null) =>
+    post<Brief>("/api/copilot/brief", { lander, site, optimized_site }),
+  plans: () => req<Plan[]>("/api/plans"),
+  submitPlan: (p: { lander: LanderParams; site: Pt; operator_id: string; name: string; window: string }) =>
+    post<{ plan: Plan; notices_sent: number }>("/api/plans", p),
+  notices: (operator_id: string) => req<Notice[]>(`/api/notices?operator_id=${operator_id}`),
+  updateNotice: (id: string, status: "acknowledged" | "objection", reply?: string) =>
+    req<Notice>(`/api/notices/${id}`, { method: "PATCH", body: JSON.stringify({ status, reply }) }),
+  curves: () => req<Curves>("/api/curves"),
+  reset: () => post<{ ok: boolean }>("/api/reset", {}),
+};
+
+export const RISK_COLOR: Record<Risk, string> = {
+  negligible: "#5eead4",
+  low: "#facc15",
+  elevated: "#fb923c",
+  critical: "#f43f5e",
+};
+
+export function fmtMeur(x: number): string {
+  if (x >= 100) return `€${x.toFixed(0)}M`;
+  if (x >= 10) return `€${x.toFixed(1)}M`;
+  if (x >= 0.01) return `€${x.toFixed(2)}M`;
+  if (x > 0) return `€${(x * 1000).toFixed(0)}k`;
+  return "€0";
+}
+export const fmtKm = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m.toFixed(0)} m`);
+export const fmtPct = (f: number) => (f >= 0.1 ? `${(f * 100).toFixed(0)}%` : f >= 0.001 ? `${(f * 100).toFixed(1)}%` : `${(f * 100).toFixed(2)}%`);
