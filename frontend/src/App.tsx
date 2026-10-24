@@ -1,149 +1,534 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Method from "./Method";
-import Notices from "./Notices";
-import Planner from "./Planner";
-import Registry from "./Registry";
-import type { Asset, Meta, Notice, Operator } from "./api";
+import { lazy, Suspense, useEffect, useState } from "react";
+import {
+  useMission,
+  DEFAULT_SITE,
+  REPLAY_DURATION,
+  type Mode,
+} from "./mission";
+import Gateway from "./components/Gateway";
+import Configuration from "./components/Configuration";
+import {
+  OperationsPanel,
+  ExposurePanel,
+  OptimizerPanel,
+  SceneControls,
+} from "./components/MissionPanels";
+import Timeline from "./components/Timeline";
+import Report from "./components/Report";
+import { Icon, type IconName } from "./components/Icon";
+import { Login, Pricing, SubscriptionInfo } from "./components/Commercial";
+import { RegistryPanel, RegistryDetail } from "./components/SharedRegistry";
+import Coordination, { CommandOverview } from "./components/Coordination";
 import { api } from "./api";
+const LunarScene = lazy(() => import("./scene/LunarScene"));
+const Method = lazy(() => import("./Method"));
 
-type Tab = "home" | "planner" | "notices" | "registry" | "method";
+const navigation: [Mode, string, IconName][] = [
+  ["operations", "Operations", "Globe2"],
+  ["setup", "Mission setup", "Box"],
+  ["simulation", "Simulation", "Zap"],
+  ["replay", "4D replay", "Play"],
+  ["optimizer", "Optimizer", "Sparkles"],
+  ["report", "Report", "FileText"],
+];
 
-function Stars() {
-  const shadow = useMemo(() => {
-    let seed = 7;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    return Array.from({ length: 160 }, () =>
-      `${(rnd() * 100).toFixed(2)}vw ${(rnd() * 100).toFixed(2)}vh 0 ${rnd() < 0.1 ? 1 : 0}px rgba(220,230,255,${(0.25 + rnd() * 0.6).toFixed(2)})`,
-    ).join(",");
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
   }, []);
-  return <div className="stars" style={{ boxShadow: shadow }} />;
+  return (
+    <span className="utc-clock">
+      {now.toLocaleTimeString("en-GB", { timeZone: "UTC" })}
+      <small>UTC</small>
+    </span>
+  );
 }
 
-function Home({ go }: { go: (t: Tab) => void }) {
+function Header() {
+  const mode = useMission((s) => s.mode),
+    connected = useMission((s) => s.connected),
+    operators = useMission((s) => s.operators),
+    acting = useMission((s) => s.actingId),
+    demo = useMission((s) => s.demo);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const publicMode = ["gateway", "pricing", "login"].includes(mode);
+  const startDemo = () => {
+    const s = useMission.getState(),
+      p = s.meta?.landers.find((p) => p.id === "superheavy");
+    if (p)
+      s.updateLander(
+        {
+          label: p.label,
+          thrust_kn: p.thrust_kn,
+          hover_s: p.hover_s,
+          dispersion_m: p.dispersion_m,
+        },
+        p.id,
+      );
+    s.moveSite(DEFAULT_SITE);
+    s.switchOperator("kestrel");
+    useMission.setState({
+      missionName: "KLL Cargo-7",
+      demo: true,
+      demoStep: 0,
+      demoPlanId: null,
+      demoRecipient: null,
+    });
+    s.setMode("operations");
+    s.focus("overview");
+  };
   return (
-    <div className="page home">
-      <Stars />
-      <div className="home-inner">
-        <div className="home-hero">
-          <div>
-            <div className="eyebrow">Lunar landing coordination platform</div>
-            <h2 className="headline">One landing.<br /><span>Everyone's safety.</span></h2>
-            <p className="home-lede">
-              Every landing on the Moon blasts regolith outward at up to 1.7 km/s, and with no air to stop it, the
-              debris flies for kilometres. As agencies and companies crowd the lunar south pole, one operator's
-              touchdown can sandblast another's solar farm, telescope or habitat. PLUME predicts each plume, finds a
-              safer site and coordinates every operator before the engines fire.
-            </p>
-            <div className="row" style={{ gap: 12, marginTop: 26 }}>
-              <button className="btn ice" style={{ padding: "13px 22px" }} onClick={() => go("planner")}>Enter Mission Control →</button>
-              <button className="btn ghost" style={{ padding: "13px 22px" }} onClick={() => go("method")}>How it works</button>
-            </div>
-            <div className="facts">
-              <div><b>160 m</b><span>Apollo 12 sandblasted Surveyor 3 from this distance (1969)</span></div>
-              <div><b>~2 t</b><span>of regolith moved by Chandrayaan-3's touchdown (2023)</span></div>
-              <div><b>§ 11</b><span>Artemis Accords: avoid harmful interference, consult first</span></div>
-            </div>
-          </div>
-          <div className="hero-art">
-            <img src="/plume-logo.jpg" alt="PLUME" />
-          </div>
-          <ol className="timeline">
-            <li><b>1969</b>Apollo 12 plume damages Surveyor 3</li>
-            <li><b>2020</b>Artemis Accords signed</li>
-            <li><b>2023</b>Chandrayaan-3 lands near the south pole</li>
-            <li><b>2030s</b>Several operators share the same sunlit ridges</li>
-            <li><b>2040</b>Routine cargo traffic, permanent bases <em>(our scenario)</em></li>
-          </ol>
-        </div>
-        <div className="features">
-          {[
-            ["Predict", "Physics model of every plume: four grain sizes, ballistic arcs, terrain shielding."],
-            ["Protect", "Shared registry of everyone's assets, priced damage per asset."],
-            ["Optimise", "Searches ~1,800 nearby sites for the lowest total risk to everyone."],
-            ["Coordinate", "Automatic consultation notices; neighbours acknowledge or object."],
-          ].map(([t, d]) => (
-            <div key={t} className="feature"><h3>{t}</h3><p>{d}</p></div>
-          ))}
-        </div>
+    <header className="flight-header">
+      <button
+        className="flight-brand"
+        onClick={() => useMission.getState().setMode("gateway")}
+        aria-label="PLUME mission gateway"
+      >
+        <img src="/plume-mark.png" alt="PLUME official mark" />
+        <span>
+          PLUME<small>LUNAR LANDING COORDINATION</small>
+        </span>
+      </button>
+      <span className="header-divider" />
+      <div className="environment-label">
+        <span className="status-dot" />{" "}
+        {publicMode ? "THE NEXT SHARED FRONTIER" : "MISSION CONTROL"}
+        <small>EXPLORATION SYSTEM / 01</small>
       </div>
+      {publicMode && (
+        <nav className="public-nav" aria-label="Platform navigation">
+          <button onClick={() => useMission.getState().setMode("gateway")}>
+            Platform
+          </button>
+          <button
+            className={mode === "pricing" ? "active" : ""}
+            onClick={() => useMission.getState().setMode("pricing")}
+          >
+            Pricing
+          </button>
+          <button
+            className={mode === "login" ? "active" : ""}
+            onClick={() => useMission.getState().setMode("login")}
+          >
+            Demo access <Icon name="ArrowRight" size={13} />
+          </button>
+        </nav>
+      )}
+      <div className="header-right">
+        <div className="connection-label">
+          <span className={`status-dot ${connected ? "" : "offline"}`} />
+          {connected ? "BACKEND CONNECTED" : "CONNECTING"}
+        </div>
+        <Clock />
+        {!publicMode && (
+          <>
+            <label className="operator-switch">
+              <span>DEMO ORGANIZATION</span>
+              <select
+                aria-label="Acting as operator"
+                value={acting}
+                onChange={(e) =>
+                  useMission.getState().switchOperator(e.target.value)
+                }
+              >
+                {operators.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="subscription-badge"
+              onClick={() => setSubscriptionOpen(true)}
+            >
+              {acting === "kestrel" ? "OPERATOR" : "REGISTRY"}
+              <small>DEMO PLAN</small>
+            </button>
+          </>
+        )}
+        <button
+          className={`demo-button ${demo ? "active" : ""}`}
+          disabled={!connected}
+          onClick={() =>
+            demo ? useMission.setState({ demo: false }) : startDemo()
+          }
+        >
+          <Icon name="Play" size={13} />
+          {demo ? "EXIT DEMO" : "DEMO MODE"}
+        </button>
+      </div>
+      {subscriptionOpen && (
+        <SubscriptionInfo onClose={() => setSubscriptionOpen(false)} />
+      )}
+    </header>
+  );
+}
+
+function Rail() {
+  const mode = useMission((s) => s.mode);
+  return (
+    <nav className="mission-rail" aria-label="Mission modes">
+      <div className="rail-top">
+        <span className="rail-index">MISSION</span>
+        {navigation.map(([id, label, icon]) => (
+          <button
+            key={id}
+            className={mode === id ? "active" : ""}
+            onClick={() => useMission.getState().setMode(id)}
+            aria-label={label}
+            aria-current={mode === id ? "page" : undefined}
+            title={label}
+          >
+            <Icon name={icon} size={21} />
+            <span>{label}</span>
+            {mode === id && <i />}
+          </button>
+        ))}
+      </div>
+      <div className="rail-bottom">
+        {(
+          [
+            ["notices", "Coordinate", "Radio"],
+            ["registry", "Registry", "Layers"],
+            ["pricing", "Plans", "Flag"],
+            ["method", "Method", "CircleHelp"],
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button
+            key={id}
+            className={mode === id ? "active" : ""}
+            onClick={() => useMission.getState().setMode(id)}
+            aria-label={label}
+            title={label}
+          >
+            <Icon name={icon} size={20} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function GuidedDemo() {
+  const step = useMission((s) => s.demoStep),
+    busy = useMission((s) => s.busy),
+    opt = useMission((s) => s.optimization),
+    assessment = useMission((s) => s.assessment);
+  const recipientReady = useMission((s) =>
+    s.notices.some(
+      (n) => n.plan_id === s.demoPlanId && n.to_operator_id === s.actingId,
+    ),
+  );
+  const steps = [
+    "Kestrel: inspect shared infrastructure.",
+    "Inspect modeled exposure, then prepare consultation.",
+    "File the original proposal and create actual notices.",
+    "Switch to the affected operator.",
+    "Record an objection as the recipient.",
+    "Return to Kestrel to prepare mitigation.",
+    "Search actual lower-cost landing candidates.",
+    "Adopt the best feasible candidate.",
+    "File the revised draft as a new proposal.",
+    "Review responses. Original objections remain open.",
+  ];
+  const labels = [
+    "SIMULATE",
+    "PREPARE REPORT",
+    "FILE ORIGINAL",
+    "SWITCH OPERATOR",
+    "RECORD OBJECTION",
+    "RETURN TO KESTREL",
+    "RUN OPTIMIZER",
+    "ADOPT BEST",
+    "FILE REVISED",
+    "FINISH",
+  ];
+  async function next() {
+    const s = useMission.getState();
+    if (step === 0) {
+      await s.simulate();
+      if (!useMission.getState().assessment) return;
+      useMission.setState({ demoStep: 1 });
+    } else if (step === 1) {
+      useMission.setState({
+        playing: false,
+        replay: REPLAY_DURATION,
+        demoStep: 2,
+      });
+      s.setMode("report");
+    } else if (step === 2) {
+      const planId = await s.filePlan();
+      if (!planId) return;
+      const state = useMission.getState(),
+        notice = state.notices
+          .filter((n) => n.plan_id === planId)
+          .sort((a, b) => b.expected_loss_meur - a.expected_loss_meur)[0];
+      if (!notice) {
+        s.notify(
+          "No affected recipient was returned. Inspect the original scenario before continuing.",
+        );
+        return;
+      }
+      useMission.setState({
+        demoStep: 3,
+        demoPlanId: planId,
+        demoRecipient: notice.to_operator_id,
+      });
+      s.setMode("notices");
+    } else if (step === 3) {
+      if (!s.demoRecipient) return;
+      s.switchOperator(s.demoRecipient);
+      s.setMode("notices");
+      useMission.setState({ demoStep: 4 });
+    } else if (step === 4) {
+      const n = s.notices.find(
+        (n) => n.plan_id === s.demoPlanId && n.to_operator_id === s.actingId,
+      );
+      if (!n) return;
+      try {
+        await api.updateNotice(
+          n.id,
+          "objection",
+          "Please evaluate a lower-exposure landing site before proceeding.",
+        );
+        await s.refresh();
+        useMission.setState({ demoStep: 5 });
+      } catch (e) {
+        useMission.setState({ error: String(e) });
+      }
+    } else if (step === 5) {
+      s.switchOperator("kestrel");
+      s.setMode("optimizer");
+      useMission.setState({ demoStep: 6 });
+    } else if (step === 6) {
+      await s.optimize();
+      if (useMission.getState().optimization?.best)
+        useMission.setState({ demoStep: 7 });
+    } else if (step === 7) {
+      if (!opt?.best) return;
+      s.moveSite({ x: opt.best.site.x, y: opt.best.site.y }, true);
+      s.focus("site");
+      s.setMode("report");
+      useMission.setState({ demoStep: 8 });
+    } else if (step === 8) {
+      useMission.setState({
+        missionName: `${s.missionName.replace(/ · revised$/, "")} · revised`,
+      });
+      const planId = await useMission.getState().filePlan();
+      if (planId) {
+        s.setMode("notices");
+        useMission.setState({ demoStep: 9 });
+      }
+    } else useMission.setState({ demo: false });
+  }
+  return (
+    <div className="guided-demo">
+      <span className="demo-step">
+        DEMO / {String(step + 1).padStart(2, "0")}
+      </span>
+      <p>{steps[step]}</p>
+      <button
+        disabled={
+          !!busy ||
+          !assessment ||
+          (step === 7 && !opt?.best) ||
+          (step === 4 && !recipientReady)
+        }
+        onClick={() => void next()}
+      >
+        {labels[step]}
+        <Icon name="ArrowRight" size={15} />
+      </button>
+      <button
+        className="icon-button"
+        aria-label="Close guided demo"
+        onClick={() => useMission.setState({ demo: false })}
+      >
+        <Icon name="X" size={15} />
+      </button>
     </div>
   );
 }
 
 export default function App() {
-  const initial = (location.hash.slice(1) || "home") as Tab;
-  const [tab, setTabState] = useState<Tab>(["home", "planner", "notices", "registry", "method"].includes(initial) ? initial : "home");
-  const setTab = useCallback((t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); }, []);
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [operators, setOperators] = useState<Operator[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [actingId, setActingId] = useState("kestrel");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
+  const mode = useMission((s) => s.mode),
+    meta = useMission((s) => s.meta),
+    connected = useMission((s) => s.connected),
+    revision = useMission((s) => s.revision),
+    demo = useMission((s) => s.demo),
+    error = useMission((s) => s.error),
+    loadError = useMission((s) => s.loadError),
+    toast = useMission((s) => s.toast),
+    terrainError = useMission((s) => s.terrainError);
   useEffect(() => {
-    Promise.all([api.meta(), api.operators()])
-      .then(([m, o]) => { setMeta(m); setOperators(o); })
-      .catch((e) => setLoadError(String(e)));
+    void useMission.getState().load();
+    const initial = location.hash.slice(1);
+    const modes = [
+      "gateway",
+      "login",
+      "pricing",
+      "setup",
+      "operations",
+      "simulation",
+      "replay",
+      "optimizer",
+      "report",
+      "notices",
+      "registry",
+      "method",
+    ];
+    if (modes.includes(initial)) useMission.setState({ mode: initial as Mode });
   }, []);
-  useEffect(() => { api.assets().then(setAssets).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { api.notices(actingId).then(setNotices).catch(() => {}); }, [actingId, refreshKey, tab]);
-
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    refresh();
-    setTimeout(() => setToast(null), 4200);
-  }, [refresh]);
-
-  const unread = notices.filter((n) => n.to_operator_id === actingId && n.status === "unread").length;
-  const acting = operators.find((o) => o.id === actingId);
-
-  if (loadError) {
-    return <div className="empty" style={{ margin: 40 }}>Cannot reach the PLUME API ({loadError}). Start the backend on port 8000.</div>;
-  }
-  if (!meta) return <div className="empty" style={{ margin: 40, border: 0 }}>Loading PLUME…</div>;
-
-  const tabs: [Tab, string][] = [
-    ["planner", "Mission Planner"], ["notices", "Notices"], ["registry", "Registry"], ["method", "Method"],
-  ];
-
+  useEffect(() => {
+    if (!connected) return;
+    const timer = setTimeout(() => void useMission.getState().analyze(), 300);
+    return () => clearTimeout(timer);
+  }, [connected, revision]);
+  useEffect(() => {
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        useMission.setState({ placeMode: false });
+        document.body.style.cursor = "";
+      }
+    };
+    window.addEventListener("keydown", escape);
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    const change = () =>
+      useMission.setState({ reducedMotion: media.matches, playing: false });
+    media.addEventListener("change", change);
+    return () => {
+      window.removeEventListener("keydown", escape);
+      media.removeEventListener("change", change);
+    };
+  }, []);
+  const legacy = mode === "method";
+  const spatial =
+    !legacy && !["report", "gateway", "login", "pricing"].includes(mode);
   return (
-    <div className="app">
-      <header className="topbar">
-        <button className="brand" onClick={() => setTab("home")} style={{ background: "none", border: 0, cursor: "pointer" }}>
-          <img src="/plume-mark.png" alt="" />
-          <div style={{ textAlign: "left" }}>
-            <div className="brand-name">PLUME</div>
-            <div className="brand-tag">Lunar landing coordination</div>
-          </div>
-        </button>
-        <nav className="tabs">
-          {tabs.map(([id, label]) => (
-            <button key={id} className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
-              {label}{id === "notices" && unread > 0 && <span className="badge">{unread}</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="spacer" />
-        <div className="acting">
-          <span className="dot" style={{ background: acting?.color }} />
-          Acting as
-          <select value={actingId} onChange={(e) => setActingId(e.target.value)}>
-            {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+    <div className={`mission-app mode-${mode}`}>
+      <Header />
+      <main className="mission-stage">
+        <div
+          className="persistent-scene"
+          aria-label="Interactive lunar environment"
+        >
+          <Suspense
+            fallback={
+              <div className="scene-loading">Loading lunar renderer…</div>
+            }
+          >
+            <LunarScene />
+          </Suspense>
         </div>
-      </header>
-      <main style={{ minHeight: 0, position: "relative" }}>
-        {tab === "home" && <Home go={setTab} />}
-        {tab === "planner" && <Planner meta={meta} assets={assets} operators={operators} actingId={actingId} onSubmitted={showToast} />}
-        {tab === "notices" && <Notices operators={operators} actingId={actingId} refreshKey={refreshKey} onChanged={refresh} />}
-        {tab === "registry" && <Registry meta={meta} assets={assets} operators={operators} actingId={actingId} refreshKey={refreshKey} onChanged={refresh} />}
-        {tab === "method" && <Method meta={meta} />}
+        {mode === "gateway" ? (
+          <Gateway />
+        ) : mode === "login" ? (
+          <Login />
+        ) : mode === "pricing" ? (
+          <Pricing />
+        ) : (
+          <>
+            <Rail />
+            {spatial && (
+              <>
+                <SceneControls />
+                {mode === "registry" ? (
+                  <>
+                    <RegistryPanel />
+                    <RegistryDetail />
+                  </>
+                ) : mode === "notices" ? (
+                  <Coordination />
+                ) : (
+                  <>
+                    {mode === "setup" ? <Configuration /> : <OperationsPanel />}
+                    {mode === "optimizer" ? (
+                      <OptimizerPanel />
+                    ) : (
+                      mode !== "setup" && <ExposurePanel />
+                    )}
+                  </>
+                )}
+                {mode === "operations" && <CommandOverview />}
+                {(mode === "simulation" || mode === "replay") && <Timeline />}
+              </>
+            )}
+            {mode === "report" && <Report />}
+            {legacy && (
+              <div className="legacy-view">
+                <Suspense
+                  fallback={
+                    <div className="scene-loading">Loading mission module…</div>
+                  }
+                >
+                  {meta && <Method meta={meta} />}
+                </Suspense>
+              </div>
+            )}
+          </>
+        )}
+        {(error || (loadError && mode !== "gateway")) && (
+          <div className="mission-error" role="alert">
+            <Icon name="TriangleAlert" size={18} />
+            <span>{error ?? loadError}</span>
+            <button
+              onClick={() =>
+                void (loadError
+                  ? useMission.getState().load()
+                  : useMission.getState().analyze())
+              }
+            >
+              RETRY
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Dismiss error"
+              onClick={() =>
+                useMission.setState({ error: null, loadError: null })
+              }
+            >
+              <Icon name="X" size={15} />
+            </button>
+          </div>
+        )}
+        {terrainError && mode !== "gateway" && (
+          <div className="terrain-error" role="status">
+            {terrainError}
+          </div>
+        )}
+        {demo && mode !== "gateway" && <GuidedDemo />}
       </main>
-      {toast && <div className="toast"><span className="dot" style={{ background: "var(--ok)" }} />{toast}</div>}
+      <footer className="flight-footer">
+        <span>
+          <span className="status-dot" />
+          PLUME / OPERATIONAL PROTOTYPE
+        </span>
+        <span>
+          {mode === "gateway"
+            ? "ONE LANDING. EVERYONE’S SAFETY."
+            : "SYNTHETIC TERRAIN · ASSET SYMBOLS ENLARGED · ILLUSTRATIVE REPLAY"}
+        </span>
+        <span>
+          BEYOND 2030 <span className="footer-plus">+</span>
+        </span>
+      </footer>
+      {toast && (
+        <div className="mission-toast" role="status">
+          <Icon name="Check" size={18} />
+          {toast}
+          <button
+            className="icon-button"
+            aria-label="Dismiss notification"
+            onClick={() => useMission.setState({ toast: null })}
+          >
+            <Icon name="X" size={15} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

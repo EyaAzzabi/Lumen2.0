@@ -11,6 +11,10 @@ export interface LanderPreset {
 }
 export interface LanderParams { label: string; thrust_kn: number; hover_s: number; dispersion_m: number }
 export interface Pt { x: number; y: number }
+export interface TerrainMesh {
+  n: number; size_m: number; x_min: number; y_min: number; step_m: number;
+  label: string; elevations_m: number[];
+}
 
 export interface AssetType {
   key: string; label: string; default_height_m: number;
@@ -78,6 +82,7 @@ const post = <T,>(path: string, body: unknown) => req<T>(path, { method: "POST",
 
 export const api = {
   meta: () => req<Meta>("/api/meta"),
+  terrainMesh: () => req<TerrainMesh>("/api/terrain/mesh"),
   operators: () => req<Operator[]>("/api/operators"),
   assets: () => req<Asset[]>("/api/assets"),
   addAsset: (a: Omit<Asset, "id">) => post<Asset>("/api/assets", a),
@@ -99,10 +104,10 @@ export const api = {
 };
 
 export const RISK_COLOR: Record<Risk, string> = {
-  negligible: "#5eead4",
-  low: "#facc15",
-  elevated: "#fb923c",
-  critical: "#f43f5e",
+  negligible: "#35D7A0",
+  low: "#E9BD83",
+  elevated: "#FF9D4A",
+  critical: "#FF684A",
 };
 
 export function fmtMeur(x: number): string {

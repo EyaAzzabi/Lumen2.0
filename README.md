@@ -10,6 +10,10 @@ damage to every registered asset, finds a safer touchdown site and sends formal 
 
 ## Run
 
+The cinematic 3D frontend and multi-operator collaboration UI are documented in
+[the frontend guide](docs/FRONTEND.md). It includes configuration, API integration,
+the two-operator demonstration, testing, and explicit prototype limitations.
+
 Backend (Python 3.11):
 
 ```bash

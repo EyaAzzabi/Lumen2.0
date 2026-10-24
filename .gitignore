@@ -6,3 +6,7 @@ backend/data/
 .env
 .vscode/
 *.tsbuildinfo
+frontend/artifacts/
+frontend/test-results/
+frontend/playwright-report/
+frontend/debug.log

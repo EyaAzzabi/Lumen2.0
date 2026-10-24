@@ -100,6 +100,23 @@ def terrain_point(x: float, y: float):
     return {"x": x, "y": y, "elevation_m": float(terrain.elevation(x, y)), "slope_deg": float(terrain.slope_deg(x, y))}
 
 
+@app.get("/api/terrain/mesh")
+def terrain_mesh():
+    """Read-only visualization grid sampled from the actual simulation terrain.
+
+    Rows run south to north, columns west to east. No visual-only elevation
+    generation or changes to the simulation's native 50 m terrain are involved.
+    """
+    import numpy as np
+
+    n = 201
+    axis = np.linspace(-HALF, HALF, n)
+    x, y = np.meshgrid(axis, axis)
+    return {"n": n, "size_m": SIZE_M, "x_min": -HALF, "y_min": -HALF,
+            "step_m": SIZE_M / (n - 1), "label": "Synthetic south-pole terrain (demo data)",
+            "elevations_m": np.round(terrain.elevation(x, y), 2).ravel().tolist()}
+
+
 # --- registry --------------------------------------------------------------
 @app.get("/api/operators")
 def operators():
