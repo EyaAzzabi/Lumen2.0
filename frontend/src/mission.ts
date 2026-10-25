@@ -13,6 +13,10 @@ import {
   type Plan,
   type Pt,
   type TerrainMesh,
+  type User,
+  type Organization,
+  type DemoAccount,
+  session,
 } from "./api";
 
 export type Mode =
@@ -28,6 +32,7 @@ export type Mode =
   | "notices"
   | "registry"
   | "method";
+export const PUBLIC_MODES: Mode[] = ["gateway", "login", "pricing", "method"];
 export type CameraView = "overview" | "top" | "site" | "asset" | "lander";
 export type Layers = Record<
   "terrain" | "infrastructure" | "zones" | "hazard" | "candidates",
@@ -50,6 +55,11 @@ export const phaseAt = (t: number) =>
 
 interface Mission {
   mode: Mode;
+  user: User | null;
+  organization: Organization | null;
+  authChecked: boolean;
+  afterLogin: Mode;
+  demoAccounts: DemoAccount[];
   meta: Meta | null;
   terrain: TerrainMesh | null;
   assets: Asset[];
@@ -98,7 +108,12 @@ interface Mission {
   setMode: (mode: Mode) => void;
   load: () => Promise<void>;
   refresh: () => Promise<void>;
-  switchOperator: (id: string) => void;
+  switchOperator: (id: string) => Promise<boolean>;
+  restoreSession: () => Promise<void>;
+  applySession: (r: { user: User; organization: Organization }) => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
+  signOut: () => Promise<void>;
   updateLander: (patch: Partial<LanderParams>, presetId?: string) => void;
   moveSite: (site: Pt, preserveOptimization?: boolean) => void;
   focus: (view: CameraView) => void;
@@ -114,6 +129,11 @@ interface Mission {
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
   mode: "gateway",
+  user: null,
+  organization: null,
+  authChecked: false,
+  afterLogin: "operations",
+  demoAccounts: [],
   meta: null,
   terrain: null,
   assets: [],
@@ -172,7 +192,12 @@ export const useMission = create<Mission>((set, get) => ({
   traverseCost: 2,
   maxSlope: 8,
   clearance: 300,
-  setMode: (mode) => {
+  setMode: (requested) => {
+    let mode = requested;
+    if (!get().user && !PUBLIC_MODES.includes(requested)) {
+      set({ afterLogin: requested });
+      mode = "login";
+    }
     const previous = get().mode;
     set({ mode, placeMode: false });
     history.replaceState(null, "", `#${mode}`);
@@ -190,7 +215,7 @@ export const useMission = create<Mission>((set, get) => ({
         api.operators(),
       ]);
       set({ meta, assets, operators, connected: true });
-      void get().refresh();
+      await get().restoreSession();
     } catch (e) {
       set({
         connected: false,
@@ -208,15 +233,18 @@ export const useMission = create<Mission>((set, get) => ({
   refresh: async () => {
     const actingId = get().actingId;
     try {
-      const [assets, plans, notices] = await Promise.all([
+      const signedIn = !!get().user;
+      const [assets, plans, notices, operators] = await Promise.all([
         api.assets(),
-        api.plans(),
-        api.notices(actingId),
+        signedIn ? api.plans() : Promise.resolve([] as Plan[]),
+        signedIn ? api.notices(actingId) : Promise.resolve([] as Notice[]),
+        api.operators(),
       ]);
       if (get().actingId !== actingId) return;
       const changed = JSON.stringify(assets) !== JSON.stringify(get().assets);
       set((s) => ({
         assets,
+        operators,
         plans,
         notices,
         coordinationError: null,
@@ -240,21 +268,80 @@ export const useMission = create<Mission>((set, get) => ({
         });
     }
   },
-  switchOperator: (actingId) => {
+  switchOperator: async (actingId) => {
+    if (actingId === get().actingId && get().user) return true;
+    // Switching organisation is a real sign-in. Only the seeded demo organisations
+    // have published demo credentials; the guided demo walkthrough uses them.
+    let accounts = get().demoAccounts;
+    if (!accounts.length) {
+      try {
+        accounts = await api.demoAccounts();
+        set({ demoAccounts: accounts });
+      } catch {
+        accounts = [];
+      }
+    }
+    const acc = accounts.find((a) => a.operator_id === actingId);
+    if (!acc) {
+      get().notify("Sign in with an account of that organization to act on its behalf.");
+      return false;
+    }
+    try {
+      await get().signIn(acc.email, acc.password);
+      return true;
+    } catch (e) {
+      set({ error: String(e) });
+      return false;
+    }
+  },
+  restoreSession: async () => {
+    if (session.token()) {
+      try {
+        const me = await api.me();
+        set({ user: me.user, organization: me.organization, actingId: me.user.operator_id });
+      } catch {
+        session.set(null);
+        set({ user: null, organization: null });
+      }
+    }
+    set({ authChecked: true });
+    if (!get().user && !PUBLIC_MODES.includes(get().mode)) get().setMode(get().mode);
+    void get().refresh();
+  },
+  applySession: (r) => {
     set((s) => ({
-      actingId,
+      user: r.user,
+      organization: r.organization,
+      actingId: r.user.operator_id,
       notices: [],
       coordinationError: null,
       selectedAsset: null,
       registryFilter: {
         ...s.registryFilter,
-        operator:
-          s.registryFilter.operator === s.actingId
-            ? actingId
-            : s.registryFilter.operator,
+        operator: s.registryFilter.operator === s.actingId ? r.user.operator_id : s.registryFilter.operator,
       },
     }));
     void get().refresh();
+  },
+  signIn: async (email, password) => {
+    const r = await api.login(email, password);
+    session.set(r.token!);
+    get().applySession(r);
+  },
+  signUp: async (body) => {
+    const r = await api.signup(body);
+    session.set(r.token!);
+    get().applySession(r);
+  },
+  signOut: async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* token already invalid */
+    }
+    session.set(null);
+    set({ user: null, organization: null, notices: [], plans: [], demo: false, selectedAsset: null });
+    get().setMode("gateway");
   },
   updateLander: (patch, presetId = "custom") =>
     set((s) => ({
@@ -431,3 +518,12 @@ export function elevationAt(
     1000
   );
 }
+
+session.onUnauthorized(() => {
+  const s = useMission.getState();
+  if (s.user) {
+    useMission.setState({ user: null, organization: null, notices: [], plans: [] });
+    s.notify("Your session has expired. Please sign in again.");
+    s.setMode("login");
+  }
+});

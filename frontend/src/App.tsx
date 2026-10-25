@@ -15,46 +15,27 @@ import {
 } from "./components/MissionPanels";
 import Timeline from "./components/Timeline";
 import Report from "./components/Report";
-import { Icon, type IconName } from "./components/Icon";
-import { Login, Pricing, SubscriptionInfo } from "./components/Commercial";
+import { Icon } from "./components/Icon";
+import { Pricing, SubscriptionInfo } from "./components/Commercial";
+import Auth from "./components/Auth";
+import { AccountMenu, AssetSearch, NotificationBell, QuickActions, Sidebar } from "./components/Chrome";
 import { RegistryPanel, RegistryDetail } from "./components/SharedRegistry";
 import Coordination, { CommandOverview } from "./components/Coordination";
 import { api } from "./api";
 const LunarScene = lazy(() => import("./scene/LunarScene"));
 const Method = lazy(() => import("./Method"));
 
-const navigation: [Mode, string, IconName][] = [
-  ["operations", "Operations", "Globe2"],
-  ["setup", "Mission setup", "Box"],
-  ["simulation", "Simulation", "Zap"],
-  ["replay", "4D replay", "Play"],
-  ["optimizer", "Optimizer", "Sparkles"],
-  ["report", "Report", "FileText"],
-];
-
-function Clock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <span className="utc-clock">
-      {now.toLocaleTimeString("en-GB", { timeZone: "UTC" })}
-      <small>UTC</small>
-    </span>
-  );
-}
-
 function Header() {
   const mode = useMission((s) => s.mode),
     connected = useMission((s) => s.connected),
-    operators = useMission((s) => s.operators),
     acting = useMission((s) => s.actingId),
+    user = useMission((s) => s.user),
     demo = useMission((s) => s.demo);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const publicMode = ["gateway", "pricing", "login"].includes(mode);
-  const startDemo = () => {
+  const startDemo = async () => {
+    // The walkthrough starts as the fictional Kestrel organisation (real demo sign-in).
+    if (!(await useMission.getState().switchOperator("kestrel"))) return;
     const s = useMission.getState(),
       p = s.meta?.landers.find((p) => p.id === "superheavy");
     if (p)
@@ -68,7 +49,6 @@ function Header() {
         p.id,
       );
     s.moveSite(DEFAULT_SITE);
-    s.switchOperator("kestrel");
     useMission.setState({
       missionName: "KLL Cargo-7",
       demo: true,
@@ -92,16 +72,10 @@ function Header() {
         </span>
       </button>
       <span className="header-divider" />
-      <div className="environment-label">
-        <span className="status-dot" />{" "}
-        {publicMode ? "THE NEXT SHARED FRONTIER" : "MISSION CONTROL"}
-        <small>EXPLORATION SYSTEM / 01</small>
-      </div>
-      {publicMode && (
+      <div className="environment-label tpl-tagline">LUNAR LANDING COORDINATION</div>
+      {publicMode ? (
         <nav className="public-nav" aria-label="Platform navigation">
-          <button onClick={() => useMission.getState().setMode("gateway")}>
-            Platform
-          </button>
+          <button onClick={() => useMission.getState().setMode("gateway")}>Platform</button>
           <button
             className={mode === "pricing" ? "active" : ""}
             onClick={() => useMission.getState().setMode("pricing")}
@@ -109,107 +83,40 @@ function Header() {
             Pricing
           </button>
           <button
-            className={mode === "login" ? "active" : ""}
-            onClick={() => useMission.getState().setMode("login")}
+            className={mode === "method" ? "active" : ""}
+            onClick={() => useMission.getState().setMode("method")}
           >
-            Demo access <Icon name="ArrowRight" size={13} />
+            Method
           </button>
         </nav>
+      ) : (
+        <div className="header-spacer" />
       )}
       <div className="header-right">
-        <div className="connection-label">
-          <span className={`status-dot ${connected ? "" : "offline"}`} />
-          {connected ? "BACKEND CONNECTED" : "CONNECTING"}
-        </div>
-        <Clock />
-        {!publicMode && (
-          <>
-            <label className="operator-switch">
-              <span>DEMO ORGANIZATION</span>
-              <select
-                aria-label="Acting as operator"
-                value={acting}
-                onChange={(e) =>
-                  useMission.getState().switchOperator(e.target.value)
-                }
-              >
-                {operators.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="subscription-badge"
-              onClick={() => setSubscriptionOpen(true)}
-            >
-              {acting === "kestrel" ? "OPERATOR" : "REGISTRY"}
-              <small>DEMO PLAN</small>
-            </button>
-          </>
+        {!publicMode && <AssetSearch />}
+        {!publicMode && <NotificationBell />}
+        {user && !publicMode && (
+          <button className="subscription-badge" onClick={() => setSubscriptionOpen(true)}>
+            {acting === "kestrel" ? "OPERATOR" : "REGISTRY"}
+            <small>PLAN</small>
+          </button>
         )}
-        <button
-          className={`demo-button ${demo ? "active" : ""}`}
-          disabled={!connected}
-          onClick={() =>
-            demo ? useMission.setState({ demo: false }) : startDemo()
-          }
-        >
-          <Icon name="Play" size={13} />
-          {demo ? "EXIT DEMO" : "DEMO MODE"}
-        </button>
+        {user && (
+          <button
+            className={`demo-button ${demo ? "active" : ""}`}
+            disabled={!connected}
+            onClick={() => (demo ? useMission.setState({ demo: false }) : startDemo())}
+          >
+            <Icon name="Play" size={13} />
+            {demo ? "EXIT DEMO" : "DEMO"}
+          </button>
+        )}
+        <AccountMenu />
       </div>
       {subscriptionOpen && (
         <SubscriptionInfo onClose={() => setSubscriptionOpen(false)} />
       )}
     </header>
-  );
-}
-
-function Rail() {
-  const mode = useMission((s) => s.mode);
-  return (
-    <nav className="mission-rail" aria-label="Mission modes">
-      <div className="rail-top">
-        <span className="rail-index">MISSION</span>
-        {navigation.map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={mode === id ? "active" : ""}
-            onClick={() => useMission.getState().setMode(id)}
-            aria-label={label}
-            aria-current={mode === id ? "page" : undefined}
-            title={label}
-          >
-            <Icon name={icon} size={21} />
-            <span>{label}</span>
-            {mode === id && <i />}
-          </button>
-        ))}
-      </div>
-      <div className="rail-bottom">
-        {(
-          [
-            ["notices", "Coordinate", "Radio"],
-            ["registry", "Registry", "Layers"],
-            ["pricing", "Plans", "Flag"],
-            ["method", "Method", "CircleHelp"],
-          ] as const
-        ).map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={mode === id ? "active" : ""}
-            onClick={() => useMission.getState().setMode(id)}
-            aria-label={label}
-            title={label}
-          >
-            <Icon name={icon} size={20} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
   );
 }
 
@@ -281,7 +188,7 @@ function GuidedDemo() {
       s.setMode("notices");
     } else if (step === 3) {
       if (!s.demoRecipient) return;
-      s.switchOperator(s.demoRecipient);
+      if (!(await s.switchOperator(s.demoRecipient))) return;
       s.setMode("notices");
       useMission.setState({ demoStep: 4 });
     } else if (step === 4) {
@@ -301,7 +208,7 @@ function GuidedDemo() {
         useMission.setState({ error: String(e) });
       }
     } else if (step === 5) {
-      s.switchOperator("kestrel");
+      if (!(await s.switchOperator("kestrel"))) return;
       s.setMode("optimizer");
       useMission.setState({ demoStep: 6 });
     } else if (step === 6) {
@@ -383,6 +290,31 @@ export default function App() {
     ];
     if (modes.includes(initial)) useMission.setState({ mode: initial as Mode });
   }, []);
+  // Live coordination: poll notices while signed in and announce new ones.
+  const userId = useMission((s) => s.user?.id);
+  useEffect(() => {
+    if (!userId) return;
+    let known: Map<string, string> | null = null;
+    const tick = async () => {
+      if (document.hidden) return;
+      await useMission.getState().refresh();
+      const s = useMission.getState();
+      const name = (id: string) => s.operators.find((o) => o.id === id)?.name ?? id;
+      if (known) {
+        for (const n of s.notices) {
+          const before = known.get(n.id);
+          if (!before && n.to_operator_id === s.actingId)
+            s.notify(`New consultation notice from ${name(n.from_operator_id)} · ${n.max_risk.toUpperCase()} risk`);
+          else if (before === "unread" && n.status !== "unread" && n.from_operator_id === s.actingId)
+            s.notify(`${name(n.to_operator_id)} ${n.status === "objection" ? "raised an objection to" : "acknowledged"} ${n.plan_id}`);
+        }
+      }
+      known = new Map(s.notices.map((n) => [n.id, n.status]));
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 10_000);
+    return () => clearInterval(timer);
+  }, [userId]);
   useEffect(() => {
     if (!connected) return;
     const timer = setTimeout(() => void useMission.getState().analyze(), 300);
@@ -391,6 +323,7 @@ export default function App() {
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (document.activeElement instanceof HTMLInputElement) return;
         useMission.setState({ placeMode: false });
         document.body.style.cursor = "";
       }
@@ -427,12 +360,12 @@ export default function App() {
         {mode === "gateway" ? (
           <Gateway />
         ) : mode === "login" ? (
-          <Login />
+          <Auth />
         ) : mode === "pricing" ? (
           <Pricing />
         ) : (
           <>
-            <Rail />
+            <Sidebar />
             {spatial && (
               <>
                 <SceneControls />
@@ -454,6 +387,7 @@ export default function App() {
                   </>
                 )}
                 {mode === "operations" && <CommandOverview />}
+                {mode === "operations" && <QuickActions />}
                 {(mode === "simulation" || mode === "replay") && <Timeline />}
               </>
             )}

@@ -10,6 +10,8 @@ import time
 import uuid
 from pathlib import Path
 
+from . import auth
+
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "state.json"
 
 LANDER_PRESETS = [
@@ -59,12 +61,30 @@ class Store:
         self.lock = threading.Lock()
         if path.exists():
             self.state = json.loads(path.read_text(encoding="utf-8"))
+            if "users" not in self.state:
+                self._seed_accounts()
+                self._save()
         else:
             self.reset()
 
     def reset(self):
         self.state = json.loads(json.dumps(SEED))
+        self._seed_accounts()
         self._save()
+
+    def _seed_accounts(self):
+        """Invite codes for every organisation and one demo account each."""
+        self.state.setdefault("users", [])
+        self.state.setdefault("sessions", [])
+        for op in self.state["operators"]:
+            op.setdefault("invite_code", auth.new_invite_code())
+            email = f"{op['id']}@plume.demo"
+            if not any(u["email"] == email for u in self.state["users"]):
+                self.state["users"].append({
+                    "id": f"u-{uuid.uuid4().hex[:8]}", "email": email, "name": f"{op['name']} (demo)",
+                    "operator_id": op["id"], "role": "admin", "demo": True,
+                    "password_hash": auth.hash_password(auth.DEMO_PASSWORD), "created_at": time.time(),
+                })
 
     def _save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +92,8 @@ class Store:
 
     # --- reads -------------------------------------------------------------
     def operators(self):
-        return self.state["operators"]
+        """Public view: invite codes are never listed."""
+        return [{k: v for k, v in o.items() if k != "invite_code"} for o in self.state["operators"]]
 
     def operator(self, op_id):
         return next((o for o in self.state["operators"] if o["id"] == op_id), None)
@@ -116,6 +137,67 @@ class Store:
                 })
             self._save()
             return plan
+
+    # --- accounts ----------------------------------------------------------
+    def user_by_email(self, email: str):
+        return next((u for u in self.state["users"] if u["email"] == email), None)
+
+    def operator_by_invite(self, code: str):
+        code = code.strip().upper()
+        return next((o for o in self.state["operators"] if o.get("invite_code") == code), None)
+
+    def create_account(self, name: str, email: str, password: str, operator_id: str | None,
+                       new_org: dict | None) -> dict:
+        with self.lock:
+            if self.user_by_email(email):
+                raise ValueError("An account with this email already exists")
+            role = "member"
+            if new_org:
+                op_id = f"org-{uuid.uuid4().hex[:6]}"
+                palette = ["#fb7185", "#22d3ee", "#a3e635", "#e879f9", "#fbbf24", "#60a5fa"]
+                self.state["operators"].append({
+                    "id": op_id, "name": new_org["name"], "short": new_org["short"],
+                    "color": palette[len(self.state["operators"]) % len(palette)],
+                    "invite_code": auth.new_invite_code(),
+                })
+                operator_id, role = op_id, "admin"
+            user = {
+                "id": f"u-{uuid.uuid4().hex[:8]}", "email": email, "name": name, "operator_id": operator_id,
+                "role": role, "demo": False, "password_hash": auth.hash_password(password), "created_at": time.time(),
+            }
+            self.state["users"].append(user)
+            self._save()
+            return user
+
+    def create_session(self, user_id: str) -> str:
+        with self.lock:
+            now = time.time()
+            token = auth.new_token()
+            self.state["sessions"] = [s for s in self.state["sessions"] if s["expires_at"] > now]
+            self.state["sessions"].append({"token_hash": auth.token_digest(token), "user_id": user_id,
+                                           "created_at": now, "expires_at": now + auth.SESSION_TTL_S})
+            self._save()
+            return token
+
+    def user_for_token(self, token: str):
+        digest = auth.token_digest(token)
+        now = time.time()
+        s = next((s for s in self.state["sessions"] if s["token_hash"] == digest and s["expires_at"] > now), None)
+        if not s:
+            return None
+        return next((u for u in self.state["users"] if u["id"] == s["user_id"]), None)
+
+    def delete_session(self, token: str):
+        with self.lock:
+            digest = auth.token_digest(token)
+            self.state["sessions"] = [s for s in self.state["sessions"] if s["token_hash"] != digest]
+            self._save()
+
+    def notice(self, notice_id: str):
+        return next((n for n in self.state["notices"] if n["id"] == notice_id), None)
+
+    def asset(self, asset_id: str):
+        return next((a for a in self.state["assets"] if a["id"] == asset_id), None)
 
     def set_notice_status(self, notice_id: str, status: str, reply: str | None = None):
         with self.lock:

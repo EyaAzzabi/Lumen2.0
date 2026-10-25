@@ -114,6 +114,10 @@ def optimize(terrain, lander: Lander, dispersion_m: float, target_x: float, targ
         shortlist.append({
             "x": float(cx[i]), "y": float(cy[i]),
             "expected_loss_meur": s["expected_loss_meur"],
+            "worst_risk": s["worst_risk"],
+            "worst_damage_fraction": max((r["damage_fraction"] for r in res), default=0.0),
+            "assets_at_risk": s["assets_at_risk"],
+            "nearest_asset_m": min((r["distance_m"] for r in res), default=None),
             "traverse_meur": float(traverse[i]),
             "total_cost_meur": s["expected_loss_meur"] + float(traverse[i]),
             "distance_from_target_m": float(np.hypot(cx[i] - target_x, cy[i] - target_y)),

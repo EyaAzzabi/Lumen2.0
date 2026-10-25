@@ -4,13 +4,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import copilot, planner
+from . import auth, copilot, planner
 from .damage import ASSET_TYPES, RISK_BANDS
 from .physics import SIZE_CLASSES, Lander, max_range_m
 from .store import LANDER_PRESETS, Store
@@ -56,7 +56,7 @@ class BriefRequest(SiteRequest):
 
 
 class AssetIn(BaseModel):
-    operator_id: str
+    operator_id: str | None = None  # ignored: the signed-in user's organisation owns the asset
     name: str = Field(min_length=1, max_length=80)
     type: Literal["habitat", "solar_array", "isru_plant", "comms_relay", "telescope", "rover"]
     x: float = Field(ge=-HALF, le=HALF)
@@ -65,7 +65,7 @@ class AssetIn(BaseModel):
 
 
 class PlanIn(SiteRequest):
-    operator_id: str
+    operator_id: str | None = None  # ignored: plans are filed by the signed-in user's organisation
     name: str = Field(min_length=1, max_length=80)
     window: str = Field(min_length=1, max_length=80)
 
@@ -73,6 +73,103 @@ class PlanIn(SiteRequest):
 class NoticeUpdate(BaseModel):
     status: Literal["acknowledged", "objection"]
     reply: str | None = Field(None, max_length=1_000)
+
+
+class SignupIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=5, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+    organization: Literal["create", "join"]
+    organization_name: str | None = Field(None, max_length=80)
+    invite_code: str | None = Field(None, max_length=40)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=120)
+    password: str = Field(max_length=200)
+
+
+# --- authentication ----------------------------------------------------------
+def _token(authorization: str | None) -> str | None:
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return None
+
+
+def current_user(authorization: str | None = Header(None)) -> dict:
+    token = _token(authorization)
+    user = store.user_for_token(token) if token else None
+    if not user:
+        raise HTTPException(401, "Sign in required")
+    return user
+
+
+def _session_payload(user: dict, token: str | None = None) -> dict:
+    op = next(o for o in store.state["operators"] if o["id"] == user["operator_id"])
+    out = {
+        "user": {k: user[k] for k in ("id", "email", "name", "operator_id", "role", "demo")},
+        "organization": {k: v for k, v in op.items() if k != "invite_code" or user["role"] == "admin"},
+    }
+    if token:
+        out["token"] = token
+    return out
+
+
+@app.post("/api/auth/signup")
+def signup(body: SignupIn):
+    email = auth.normalize_email(body.email)
+    if not auth.valid_email(email):
+        raise HTTPException(422, "Enter a valid email address")
+    if email.endswith("@plume.demo"):
+        raise HTTPException(422, "This domain is reserved for demo accounts")
+    operator_id, new_org = None, None
+    if body.organization == "create":
+        org_name = (body.organization_name or "").strip()
+        if len(org_name) < 2:
+            raise HTTPException(422, "Enter your organization's name")
+        if any(o["name"].lower() == org_name.lower() for o in store.state["operators"]):
+            raise HTTPException(409, "This organization already exists. Ask a member for its invite code")
+        short = "".join(w[0] for w in org_name.split()[:3]).upper() or org_name[:3].upper()
+        new_org = {"name": org_name, "short": short}
+    else:
+        op = store.operator_by_invite(body.invite_code or "")
+        if not op:
+            raise HTTPException(404, "Invalid invite code")
+        operator_id = op["id"]
+    try:
+        user = store.create_account(body.name.strip(), email, body.password, operator_id, new_org)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return _session_payload(user, store.create_session(user["id"]))
+
+
+@app.post("/api/auth/login")
+def login(body: LoginIn):
+    user = store.user_by_email(auth.normalize_email(body.email))
+    if not user or not auth.verify_password(body.password, user["password_hash"]):
+        raise HTTPException(401, "Incorrect email or password")
+    return _session_payload(user, store.create_session(user["id"]))
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(current_user)):
+    return _session_payload(user)
+
+
+@app.post("/api/auth/logout")
+def logout(authorization: str | None = Header(None)):
+    token = _token(authorization)
+    if token:
+        store.delete_session(token)
+    return {"ok": True}
+
+
+@app.get("/api/auth/demo-accounts")
+def demo_accounts():
+    """Seeded demo logins (fictional organisations), shown on the sign-in page."""
+    return [{"email": u["email"], "organization": store.operator(u["operator_id"])["name"],
+             "operator_id": u["operator_id"], "password": auth.DEMO_PASSWORD}
+            for u in store.state["users"] if u.get("demo")]
 
 
 # --- reference data --------------------------------------------------------
@@ -129,21 +226,25 @@ def assets():
 
 
 @app.post("/api/assets")
-def add_asset(body: AssetIn):
-    if not store.operator(body.operator_id):
-        raise HTTPException(404, "Unknown operator")
-    return store.add_asset(body.model_dump())
+def add_asset(body: AssetIn, user: dict = Depends(current_user)):
+    return store.add_asset({**body.model_dump(), "operator_id": user["operator_id"]})
 
 
 @app.delete("/api/assets/{asset_id}")
-def delete_asset(asset_id: str):
-    if not store.delete_asset(asset_id):
+def delete_asset(asset_id: str, user: dict = Depends(current_user)):
+    a = store.asset(asset_id)
+    if not a:
         raise HTTPException(404, "Unknown asset")
+    if a["operator_id"] != user["operator_id"]:
+        raise HTTPException(403, "Only the owning organization can remove this asset")
+    store.delete_asset(asset_id)
     return {"ok": True}
 
 
 @app.post("/api/reset")
-def reset():
+def reset(user: dict = Depends(current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
     store.reset()
     return {"ok": True}
 
@@ -196,7 +297,7 @@ def curves():
 
 
 @app.post("/api/copilot/brief")
-def brief(body: BriefRequest):
+def brief(body: BriefRequest, user: dict = Depends(current_user)):
     assets_ = store.assets()
     lander = body.lander.physics()
     base = planner.assess(terrain, lander, body.lander.dispersion_m, body.site.x, body.site.y, assets_)
@@ -209,18 +310,16 @@ def brief(body: BriefRequest):
 
 # --- landing plans & notices -----------------------------------------------
 @app.get("/api/plans")
-def plans():
+def plans(user: dict = Depends(current_user)):
     return store.plans()
 
 
 @app.post("/api/plans")
-def submit_plan(body: PlanIn):
-    if not store.operator(body.operator_id):
-        raise HTTPException(404, "Unknown operator")
+def submit_plan(body: PlanIn, user: dict = Depends(current_user)):
     assets_ = store.assets()
     result = planner.assess(terrain, body.lander.physics(), body.lander.dispersion_m, body.site.x, body.site.y, assets_)
     plan = {
-        "operator_id": body.operator_id, "name": body.name, "window": body.window,
+        "operator_id": user["operator_id"], "filed_by": user["email"], "name": body.name, "window": body.window,
         "lander": body.lander.model_dump(), "site": body.site.model_dump(),
         "summary": result["summary"],
     }
@@ -231,12 +330,18 @@ def submit_plan(body: PlanIn):
 
 
 @app.get("/api/notices")
-def notices(operator_id: str | None = None):
-    return store.notices(operator_id)
+def notices(operator_id: str | None = None, user: dict = Depends(current_user)):
+    # Each organisation only sees notices it sent or received.
+    return store.notices(user["operator_id"])
 
 
 @app.patch("/api/notices/{notice_id}")
-def update_notice(notice_id: str, body: NoticeUpdate):
+def update_notice(notice_id: str, body: NoticeUpdate, user: dict = Depends(current_user)):
+    existing = store.notice(notice_id)
+    if not existing:
+        raise HTTPException(404, "Unknown notice")
+    if existing["to_operator_id"] != user["operator_id"]:
+        raise HTTPException(403, "Only the notified organization can respond")
     n = store.set_notice_status(notice_id, body.status, body.reply)
     if not n:
         raise HTTPException(404, "Unknown notice")

@@ -22,7 +22,8 @@ export function OperationsPanel() {
     operators = useMission((s) => s.operators),
     selected = useMission((s) => s.selectedAsset),
     place = useMission((s) => s.placeMode),
-    assessment = useMission((s) => s.assessment);
+    assessment = useMission((s) => s.assessment),
+    org = useMission((s) => s.organization);
   const [expanded, setExpanded] = useState(true);
   return (
     <aside className="floating-panel operations-panel">
@@ -34,7 +35,7 @@ export function OperationsPanel() {
       </div>
       <div className="panel-content">
         <div className="mission-id">
-          <span>KLL / SURFACE OPERATIONS</span>
+          <span>{(org?.short ?? "PLUME").toUpperCase()} / SURFACE OPERATIONS</span>
           <h2>{name || "Untitled mission"}</h2>
           <div className="subtle-tag">PLANNING SCENARIO · 2040</div>
         </div>
@@ -370,33 +371,11 @@ export function ExposurePanel() {
 
 export function OptimizerPanel() {
   const opt = useMission((s) => s.optimization),
-    busy = useMission((s) => s.busy),
-    site = useMission((s) => s.site),
-    assets = useMission((s) => s.assets);
+    busy = useMission((s) => s.busy);
   const radius = useMission((s) => s.searchRadius),
     traverse = useMission((s) => s.traverseCost),
     slope = useMission((s) => s.maxSlope),
     clearance = useMission((s) => s.clearance);
-  const candidates = [
-    ...(opt?.best
-      ? [
-          {
-            ...opt.best.site,
-            expected_loss_meur: opt.best.summary.expected_loss_meur,
-            traverse_meur: opt.best_traverse_meur ?? 0,
-            total_cost_meur:
-              opt.best.summary.expected_loss_meur +
-              (opt.best_traverse_meur ?? 0),
-            slope_deg: opt.best.site.slope_deg,
-            distance_from_target_m: Math.hypot(
-              opt.best.site.x - opt.target.site.x,
-              opt.best.site.y - opt.target.site.y,
-            ),
-          },
-        ]
-      : []),
-    ...(opt?.alternatives ?? []),
-  ];
   return (
     <aside className="floating-panel exposure-panel optimizer-panel">
       <div className="panel-header">
@@ -491,119 +470,7 @@ export function OptimizerPanel() {
           </p>
         )}
       </div>
-      {opt && (
-        <>
-          <div className="panel-section">
-            <div className="search-summary">
-              <span>
-                <b>{opt.search.candidates.toLocaleString()}</b>screened
-              </span>
-              <span>
-                <b>{opt.search.feasible.toLocaleString()}</b>feasible
-              </span>
-              <span>
-                <b>{(opt.compute_ms / 1000).toFixed(1)} s</b>compute
-              </span>
-            </div>
-            <div className="baseline-loss">
-              ORIGINAL MODELED LOSS{" "}
-              <strong>{fmtMeur(opt.target.summary.expected_loss_meur)}</strong>
-            </div>
-          </div>
-          <div className="panel-section candidate-list">
-            {!candidates.length && (
-              <div className="empty-state">
-                <Icon name="TriangleAlert" />
-                <h3>No feasible site found</h3>
-                <p>
-                  Adjust the search radius, slope or clearance constraints and
-                  run again.
-                </p>
-              </div>
-            )}
-            {candidates.map((c, i) => {
-              const selected = Math.hypot(c.x - site.x, c.y - site.y) < 1,
-                nearest = Math.min(
-                  ...assets.map((a) => Math.hypot(a.x - c.x, a.y - c.y)),
-                );
-              return (
-                <div
-                  className={`candidate-card ${selected ? "adopted" : ""}`}
-                  key={i}
-                >
-                  <div className="row between">
-                    <span className={i === 0 ? "best-label" : "panel-subtitle"}>
-                      {i === 0 ? "BEST OBJECTIVE" : `ALTERNATIVE ${i}`}
-                    </span>
-                    <span className="mono">
-                      {c.slope_deg.toFixed(1)}° slope
-                    </span>
-                  </div>
-                  <div className="candidate-value">
-                    {fmtMeur(c.total_cost_meur)}
-                    <span>total objective</span>
-                  </div>
-                  <dl className="data-list">
-                    <dt>Modeled loss</dt>
-                    <dd>{fmtMeur(c.expected_loss_meur)}</dd>
-                    <dt>Traverse cost</dt>
-                    <dd>{fmtMeur(c.traverse_meur)}</dd>
-                    <dt>Moved from origin</dt>
-                    <dd>{fmtKm(c.distance_from_target_m)}</dd>
-                    <dt>Nearest registry asset</dt>
-                    <dd>
-                      {Number.isFinite(nearest)
-                        ? fmtKm(nearest)
-                        : "None registered"}
-                    </dd>
-                  </dl>
-                  <div className="candidate-coords">
-                    E {(c.x / 1000).toFixed(2)} / N {(c.y / 1000).toFixed(2)} km
-                  </div>
-                  <button
-                    className={`outline-button full ${selected ? "adopted-button" : ""}`}
-                    disabled={selected || !!busy}
-                    onClick={() => {
-                      useMission.getState().moveSite({ x: c.x, y: c.y }, true);
-                      useMission.getState().focus("site");
-                      useMission
-                        .getState()
-                        .notify(
-                          "Candidate adopted. Reassessing exposure at the selected coordinates.",
-                        );
-                    }}
-                  >
-                    <Icon name={selected ? "Check" : "Target"} size={15} />
-                    {selected ? "CURRENT LANDING SITE" : "ADOPT THIS SITE"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <div className="panel-section">
-            <button
-              className="outline-button full"
-              onClick={() => {
-                useMission
-                  .getState()
-                  .moveSite(
-                    { x: opt.target.site.x, y: opt.target.site.y },
-                    true,
-                  );
-                useMission.getState().focus("site");
-              }}
-            >
-              COMPARE ORIGINAL SITE <Icon name="ArrowLeft" size={15} />
-            </button>
-            <button
-              className="action-text full"
-              onClick={() => useMission.getState().setMode("report")}
-            >
-              OPEN COORDINATION REPORT <Icon name="ArrowRight" size={15} />
-            </button>
-          </div>
-        </>
-      )}
+      {opt && <CandidateComparison />}
     </aside>
   );
 }
@@ -732,6 +599,194 @@ export function SceneControls() {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+const LETTERS = ["A", "B", "C"];
+
+function riskWord(r: string) {
+  return r === "negligible" ? "Very low risk" : r === "low" ? "Low risk" : r === "elevated" ? "Elevated risk" : "Critical risk";
+}
+
+function Gauge({ value, color }: { value: number; color: string }) {
+  // Arc length on a square-root scale so small but real damage stays visible.
+  const r = 46,
+    c = 2 * Math.PI * r,
+    f = Math.min(1, Math.sqrt(value / 0.5));
+  return (
+    <svg className="risk-gauge" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r={r} className="gauge-track" />
+      <circle
+        cx="60"
+        cy="60"
+        r={r}
+        className="gauge-value"
+        style={{ stroke: color, strokeDasharray: `${c * f} ${c}` }}
+        transform="rotate(-90 60 60)"
+      />
+    </svg>
+  );
+}
+
+export function CandidateComparison() {
+  const opt = useMission((s) => s.optimization),
+    site = useMission((s) => s.site),
+    busy = useMission((s) => s.busy);
+  const [pick, setPick] = useState(0);
+  if (!opt) return null;
+  const best = opt.best;
+  const candidates = [
+    ...(best
+      ? [
+          {
+            x: best.site.x,
+            y: best.site.y,
+            expected_loss_meur: best.summary.expected_loss_meur,
+            traverse_meur: opt.best_traverse_meur ?? 0,
+            slope_deg: best.site.slope_deg,
+            distance_from_target_m: Math.hypot(best.site.x - opt.target.site.x, best.site.y - opt.target.site.y),
+            worst_risk: best.summary.worst_risk,
+            worst_damage_fraction: Math.max(0, ...best.assets.map((a) => a.damage_fraction)),
+            assets_at_risk: best.summary.assets_at_risk,
+            nearest_asset_m: best.assets.length ? Math.min(...best.assets.map((a) => a.distance_m)) : null,
+          },
+        ]
+      : []),
+    ...opt.alternatives,
+  ].slice(0, 3);
+  const original = opt.target.summary;
+  if (!candidates.length)
+    return (
+      <div className="panel-section">
+        <div className="empty-state">
+          <Icon name="TriangleAlert" />
+          <h3>No feasible site found</h3>
+          <p>Adjust the search radius, slope or clearance constraints and run again.</p>
+        </div>
+      </div>
+    );
+  const sel = candidates[Math.min(pick, candidates.length - 1)];
+  const letter = LETTERS[Math.min(pick, candidates.length - 1)];
+  const color = RISK_COLOR[sel.worst_risk];
+  const adopted = Math.hypot(sel.x - site.x, sel.y - site.y) < 1;
+  const reduction = original.expected_loss_meur > 0 ? 1 - sel.expected_loss_meur / original.expected_loss_meur : 0;
+  const adopt = (simulate: boolean) => {
+    const s = useMission.getState();
+    s.moveSite({ x: sel.x, y: sel.y }, true);
+    s.focus("site");
+    if (simulate) void s.simulate();
+    else s.notify(`Site ${letter} confirmed. Reassessing exposure at the new coordinates.`);
+  };
+  return (
+    <>
+      <div className="panel-section">
+        <div className="panel-subtitle row between">
+          CANDIDATE SITES COMPARISON
+          <span className="mono faint">
+            {opt.search.candidates.toLocaleString()} screened · {(opt.compute_ms / 1000).toFixed(1)} s
+          </span>
+        </div>
+        <div className="site-cards">
+          {candidates.map((c, i) => {
+            const col = RISK_COLOR[c.worst_risk];
+            return (
+              <button
+                key={i}
+                className={`site-card ${i === pick ? "selected" : ""}`}
+                style={{ ["--site" as string]: col }}
+                onClick={() => setPick(i)}
+              >
+                <span className="site-letter">{LETTERS[i]}</span>
+                <span className="site-risk">{riskWord(c.worst_risk)}</span>
+                <dl>
+                  <dt>Worst</dt>
+                  <dd style={{ color: col }}>{fmtPct(c.worst_damage_fraction)}</dd>
+                  <dt>Loss</dt>
+                  <dd>{fmtMeur(c.expected_loss_meur)}</dd>
+                  <dt>Slope</dt>
+                  <dd>{c.slope_deg.toFixed(1)}°</dd>
+                  <dt>Nearest</dt>
+                  <dd>{c.nearest_asset_m != null ? fmtKm(c.nearest_asset_m) : "—"}</dd>
+                </dl>
+                <span className="site-select">Select site {LETTERS[i]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="panel-section">
+        <div className="panel-subtitle">RISK ANALYSIS (SELECTED SITE)</div>
+        <div className="site-verdict">
+          <span className="site-letter" style={{ ["--site" as string]: color }}>
+            {letter}
+          </span>
+          <div>
+            <b style={{ color }}>
+              Site {letter} — {pick === 0 ? "Optimal choice" : `Alternative ${pick}`}
+            </b>
+            <small>
+              {pick === 0 ? "Lowest total objective: neighbour losses + surface logistics." : "Higher total objective than site A."}
+            </small>
+          </div>
+        </div>
+        <div className="gauge-row">
+          <div className="gauge-wrap">
+            <Gauge value={sel.worst_damage_fraction} color={color} />
+            <div className="gauge-label">
+              <b>{fmtPct(sel.worst_damage_fraction)}</b>
+              <small>worst-asset damage</small>
+            </div>
+          </div>
+          <ul className="gauge-legend">
+            <li>
+              <i style={{ background: color }} /> Expected loss <b>{fmtMeur(sel.expected_loss_meur)}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--ice)" }} /> Assets at elevated+ <b>{sel.assets_at_risk}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--gold)" }} /> Surface logistics <b>{fmtMeur(sel.traverse_meur)}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--ok)" }} /> Vs requested site <b>−{(reduction * 100).toFixed(1)}%</b>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div className="panel-section">
+        <div className="panel-subtitle">IMPACT PREVIEW</div>
+        <dl className="data-list">
+          <dt>Requested site loss</dt>
+          <dd style={{ color: RISK_COLOR[original.worst_risk] }}>
+            {fmtMeur(original.expected_loss_meur)} · {original.worst_risk}
+          </dd>
+          <dt>Moved from requested</dt>
+          <dd>{fmtKm(sel.distance_from_target_m)}</dd>
+          <dt>Distance to nearest asset</dt>
+          <dd>{sel.nearest_asset_m != null ? fmtKm(sel.nearest_asset_m) : "—"}</dd>
+          <dt>Coordinates (E / N)</dt>
+          <dd>
+            {(sel.x / 1000).toFixed(2)} / {(sel.y / 1000).toFixed(2)} km
+          </dd>
+        </dl>
+        <button className="confirm-site" disabled={adopted || !!busy} onClick={() => adopt(false)}>
+          {adopted ? `Site ${letter} is the current landing site` : `Confirm Site ${letter}`}
+          <Icon name={adopted ? "Check" : "ArrowRight"} size={18} />
+        </button>
+        <button className="outline-button full" disabled={!!busy} onClick={() => adopt(true)}>
+          <Icon name="Play" size={15} /> RUN DETAILED SIMULATION
+        </button>
+        <button
+          className="action-text full"
+          onClick={() => {
+            useMission.getState().moveSite({ x: opt.target.site.x, y: opt.target.site.y }, true);
+            useMission.getState().focus("site");
+          }}
+        >
+          <Icon name="ArrowLeft" size={15} /> COMPARE REQUESTED SITE
+        </button>
+      </div>
     </>
   );
 }

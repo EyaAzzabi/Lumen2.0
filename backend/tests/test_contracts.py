@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from plume import api
+from plume import api, auth
 from plume.store import Store
 
 
@@ -19,8 +19,15 @@ class MissionContracts(unittest.TestCase):
         cls.previous_store = api.store
         api.store = Store(Path(cls.directory.name) / "state.json")
         cls.client = TestClient(api.app)
+        cls.client.headers["Authorization"] = "Bearer " + cls.login("kestrel")
         cls.body = {"lander": {"label": "Super-heavy lander", "thrust_kn": 1800, "hover_s": 30,
                               "dispersion_m": 50}, "site": {"x": 1500, "y": -1500}}
+
+    @classmethod
+    def login(cls, operator_id):
+        r = cls.client.post("/api/auth/login", json={"email": f"{operator_id}@plume.demo", "password": auth.DEMO_PASSWORD})
+        assert r.status_code == 200, r.text
+        return r.json()["token"]
 
     @classmethod
     def tearDownClass(cls):
@@ -77,7 +84,9 @@ class MissionContracts(unittest.TestCase):
         self.assertGreater(len(notices), 0)
         n = notices[0]
         for status in ["objection", "acknowledged"]:
-            response = self.client.patch(f"/api/notices/{n['id']}", json={"status": status, "reply": "Recorded by contract test"})
+            recipient = {"Authorization": "Bearer " + self.login(n["to_operator_id"])}
+            response = self.client.patch(f"/api/notices/{n['id']}", json={"status": status, "reply": "Recorded by contract test"},
+                                         headers=recipient)
             self.assertEqual(response.status_code, 200)
             persisted = Store(api.store.path)
             self.assertEqual(next(i for i in persisted.notices() if i["id"] == n["id"])["status"], status)
@@ -99,3 +108,54 @@ class MissionContracts(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthContracts(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory(prefix="plume-auth-")
+        self.previous_store = api.store
+        api.store = Store(Path(self.directory.name) / "state.json")
+        self.client = TestClient(api.app)
+
+    def tearDown(self):
+        api.store = self.previous_store
+        self.client.close()
+        self.directory.cleanup()
+
+    def signup(self, **kw):
+        body = {"name": "Test User", "email": "user@example.com", "password": "correct-horse",
+                "organization": "create", "organization_name": "Test Org", **kw}
+        return self.client.post("/api/auth/signup", json=body)
+
+    def test_signup_login_logout(self):
+        r = self.signup()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["user"]["role"], "admin")
+        self.assertEqual(self.signup(organization_name="Other Org").status_code, 409)
+        self.assertEqual(self.client.post("/api/auth/login", json={"email": "USER@example.com", "password": "wrong-pass"}).status_code, 401)
+        token = self.client.post("/api/auth/login", json={"email": "USER@example.com", "password": "correct-horse"}).json()["token"]
+        h = {"Authorization": f"Bearer {token}"}
+        self.assertEqual(self.client.get("/api/auth/me", headers=h).status_code, 200)
+        self.client.post("/api/auth/logout", headers=h)
+        self.assertEqual(self.client.get("/api/auth/me", headers=h).status_code, 401)
+        self.assertNotIn(token, Path(api.store.path).read_text())
+
+    def test_join_requires_valid_invite_and_hides_codes(self):
+        self.assertTrue(all("invite_code" not in o for o in self.client.get("/api/operators").json()))
+        self.assertEqual(self.signup(organization="join", invite_code="0000-0000-0000").status_code, 404)
+        admin = self.client.post("/api/auth/login", json={"email": "selene@plume.demo", "password": auth.DEMO_PASSWORD}).json()
+        r = self.signup(email="m@example.com", organization="join", invite_code=admin["organization"]["invite_code"])
+        self.assertEqual(r.json()["user"]["operator_id"], "selene")
+        self.assertNotIn("invite_code", r.json()["organization"])
+
+    def test_tenant_boundaries(self):
+        self.assertEqual(self.client.get("/api/plans").status_code, 401)
+        token = self.client.post("/api/auth/login", json={"email": "kestrel@plume.demo", "password": auth.DEMO_PASSWORD}).json()["token"]
+        h = {"Authorization": f"Bearer {token}"}
+        self.assertEqual(self.client.delete("/api/assets/f-tel", headers=h).status_code, 403)
+        body = {"lander": {"label": "S", "thrust_kn": 1800, "hover_s": 30, "dispersion_m": 50}, "site": {"x": 1500, "y": -1500},
+                "operator_id": "farlight", "name": "Spoof", "window": "w"}
+        plan = self.client.post("/api/plans", json=body, headers=h).json()["plan"]
+        self.assertEqual(plan["operator_id"], "kestrel")
+        sent = self.client.get("/api/notices", headers=h).json()[0]
+        self.assertEqual(self.client.patch(f"/api/notices/{sent['id']}", json={"status": "acknowledged"}, headers=h).status_code, 403)

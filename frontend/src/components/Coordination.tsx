@@ -44,6 +44,8 @@ export function CommandOverview() {
 }
 
 export default function Coordination() {
+  const ownAssets = useMission((s) => s.assets.filter((a) => a.operator_id === s.actingId).length),
+    isDemo = useMission((s) => !!s.user?.demo);
   const acting = useMission((s) => s.actingId),
     notices = useMission((s) => s.notices),
     plans = useMission((s) => s.plans),
@@ -113,7 +115,7 @@ export default function Coordination() {
           <p className="panel-intro">
             {operators.find((o) => o.id === acting)?.name}
             <br />
-            Demo organization context · persistent backend records
+            Live · refreshes every 10 s
           </p>
           <div className="coordination-tabs">
             {(["inbox", "sent", "plans"] as const).map((t) => (
@@ -226,10 +228,31 @@ export default function Coordination() {
                   <h3>
                     No {box === "inbox" ? "incoming" : "outgoing"} notices.
                   </h3>
-                  <p>
-                    File a landing proposal to create real backend consultation
-                    records for potentially affected neighbors.
-                  </p>
+                  {box === "inbox" && !ownAssets ? (
+                    <>
+                      <p>
+                        Your organization has no registered assets yet, so no
+                        landing can put it at risk. Register your installations
+                        to receive consultation notices from other operators.
+                      </p>
+                      <button
+                        className="outline-button full"
+                        onClick={() => useMission.getState().setMode("registry")}
+                      >
+                        <Icon name="Plus" size={14} /> REGISTER AN ASSET
+                      </button>
+                    </>
+                  ) : box === "inbox" ? (
+                    <p>
+                      You are notified automatically when another operator files
+                      a landing that puts one of your assets at risk.
+                    </p>
+                  ) : (
+                    <p>
+                      File a landing proposal: every operator whose assets are
+                      at risk is notified automatically.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -374,12 +397,12 @@ export default function Coordination() {
                     </p>
                   )}
                 </>
-              ) : (
+              ) : isDemo ? (
                 <>
                   <button
                     className="outline-button full"
                     onClick={() =>
-                      useMission
+                      void useMission
                         .getState()
                         .switchOperator(current.to_operator_id)
                     }
@@ -392,9 +415,13 @@ export default function Coordination() {
                     <Icon name="ArrowRight" size={14} />
                   </button>
                   <p className="panel-note">
-                    Demo context switch, not secure authentication.
+                    Signs in to the recipient's demo account.
                   </p>
                 </>
+              ) : (
+                <p className="panel-note">
+                  Awaiting the recipient organization's response.
+                </p>
               )}
             </div>
             <div className="panel-section">
@@ -424,7 +451,7 @@ export default function Coordination() {
               <p>
                 Plan → Notify → Review → Respond
                 <br />
-                <span>Resolution requires a future backend capability.</span>
+                <span>Every response is stored with the notice and visible to both organizations.</span>
               </p>
             </div>
           </div>
