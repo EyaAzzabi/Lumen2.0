@@ -239,6 +239,31 @@ export interface Session {
   permissions: string[];
   roles: string[];
 }
+export interface DraftData {
+  name: string;
+  window: string;
+  mission_ready: boolean;
+  lander: LanderParams;
+  site: Pt;
+  editing_plan_id: string | null;
+  editing_revision: number | null;
+  search_radius_m: number;
+  traverse_meur_per_km: number;
+  max_slope_deg: number;
+  clearance_m: number;
+  optimization_run_id?: string | null;
+}
+export interface MissionDraft {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  version: number;
+  status: "draft" | "archived" | "filed";
+  created_at: number;
+  updated_at: number;
+  filed_plan_id: string | null;
+  data: DraftData;
+}
 export interface PlanDetail {
   plan: Plan;
   revisions: (Plan & {
@@ -280,6 +305,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const idem =
     mutating &&
     (path === "/api/plans" ||
+      path.startsWith("/api/drafts") ||
       path.includes("/revisions") ||
       init?.method === "PATCH");
   if (idem && !pendingKeys.has(signature))
@@ -362,6 +388,22 @@ export interface Member {
 
 export const api = {
   cancelRequests,
+  drafts: () => req<MissionDraft[]>("/api/drafts"),
+  getDraft: (id: string) => req<MissionDraft>(`/api/drafts/${id}`),
+  createDraft: (data: DraftData) => post<MissionDraft>("/api/drafts", data),
+  updateDraft: (id: string, data: DraftData, expected_version: number) =>
+    req<MissionDraft>(`/api/drafts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ data, expected_version }),
+    }),
+  archiveDraft: (id: string, expected_version: number) =>
+    post<MissionDraft>(`/api/drafts/${id}/archive`, { expected_version }),
+  restoreDraft: (id: string, expected_version: number) =>
+    post<MissionDraft>(`/api/drafts/${id}/restore`, { expected_version }),
+  fileDraft: (id: string, expected_version: number) =>
+    post<{ plan: Plan; notices_sent: number }>(`/api/drafts/${id}/file`, {
+      expected_version,
+    }),
   members: () => req<Member[]>("/api/organization/members"),
   onUnauthorized: (callback: () => void) => {
     unauthorized = callback;

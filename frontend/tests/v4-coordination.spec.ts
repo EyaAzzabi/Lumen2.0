@@ -49,7 +49,9 @@ test("two operators file, object, optimize, revise and explicitly coordinate", a
   )
     await p.getByText("File your current draft", { exact: true }).click();
   const filedResponse = p.waitForResponse(
-    (r) => r.url().endsWith("/api/plans") && r.request().method() === "POST",
+    (r) =>
+      /\/api\/drafts\/[^/]+\/file$/.test(r.url()) &&
+      r.request().method() === "POST",
   );
   await p.getByRole("button", { name: "Submit proposal", exact: true }).click();
   const filed = await (await filedResponse).json();
@@ -88,7 +90,7 @@ test("two operators file, object, optimize, revise and explicitly coordinate", a
   await p.getByLabel("Proposal to review").selectOption(id);
   const revisedResponse = p.waitForResponse(
     (r) =>
-      r.url().endsWith(`/api/plans/${id}/revisions`) &&
+      /\/api\/drafts\/[^/]+\/file$/.test(r.url()) &&
       r.request().method() === "POST",
   );
   await p.getByRole("button", { name: "Submit revision", exact: true }).click();

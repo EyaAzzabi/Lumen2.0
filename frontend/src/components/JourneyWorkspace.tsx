@@ -1,3 +1,4 @@
+import MissionLibrary, { DraftSaveControl } from "./MissionLibrary";
 import {
   useEffect,
   useMemo,
@@ -80,6 +81,7 @@ export function JourneyRail() {
         ))}
       </div>
       <Onboarding />
+      <MissionLibrary />
       <div className="journey-rail-summary">
         <span>CURRENT MISSION</span>
         <b>{name || "Not configured yet"}</b>
@@ -914,6 +916,7 @@ export function AnalysisWorkspace() {
         )}
       </div>
       <div className="journey-panel-foot">
+        <DraftSaveControl />
         {tab === "summary" || tab === "asset" ? (
           <button
             className="action-primary full"
@@ -1039,6 +1042,11 @@ export function CoordinationWorkspace() {
     s.moveSite(plan.site);
     useMission.setState({
       missionReady: true,
+      draftId: null,
+      draftVersion: 0,
+      draftFingerprint: "",
+      draftStatus: "local",
+      draftError: null,
       missionName: plan.name,
       window: plan.window,
       editingPlanId: plan.id,

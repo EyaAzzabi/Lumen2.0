@@ -569,10 +569,23 @@ class Store:
         key,
         expected_revision=None,
         request_body=None,
+        draft_id=None,
+        draft_version=None,
     ):
         with self.transaction() as c:
 
             def write():
+                if draft_id:
+                    draft = c.execute(
+                        "SELECT * FROM mission_drafts WHERE id=? AND organization_id=?",
+                        (draft_id, plan["operator_id"]),
+                    ).fetchone()
+                    if (
+                        not draft
+                        or draft["status"] != "draft"
+                        or draft["version"] != draft_version
+                    ):
+                        raise Conflict("Draft changed before filing; reload it")
                 old = None
                 if plan_id:
                     row = c.execute(
@@ -638,6 +651,11 @@ class Store:
                     c.execute(
                         "INSERT INTO plans VALUES(?,?,?,?)",
                         (pid, plan["operator_id"], encode(saved), now),
+                    )
+                if draft_id:
+                    c.execute(
+                        "UPDATE mission_drafts SET status='filed',filed_plan_id=?,version=version+1,updated_at=? WHERE id=?",
+                        (pid, now, draft_id),
                     )
                 c.execute(
                     "INSERT INTO revisions VALUES(?,?,?,?)",

@@ -47,7 +47,13 @@ export default function PlanHistory({ planId }: { planId: string }) {
     s.updateLander(p.lander);
     s.moveSite(p.site);
     useMission.setState({
-      missionReady:true,editingPlanId: p.id,
+      missionReady: true,
+      editingPlanId: p.id,
+      draftId: null,
+      draftVersion: 0,
+      draftFingerprint: "",
+      draftStatus: "local",
+      draftError: null,
       editingRevision: p.revision ?? 1,
       missionName: p.name,
       window: p.window,

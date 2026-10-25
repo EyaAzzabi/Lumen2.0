@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from . import copilot, planner, auth, accounts
+from . import copilot, planner, auth, accounts, drafts
 from .contracts import *
 from .budget import computation
 from .database import Conflict
@@ -254,6 +254,28 @@ class PlanIn(SiteRequest):
             self.window_start.isoformat() + " / " + self.window_end.isoformat()
         )
         return self
+
+
+class DraftData(SiteRequest):
+    name: str = Field("", max_length=80)
+    window: str = Field("", max_length=200)
+    mission_ready: bool = False
+    editing_plan_id: str | None = Field(None, max_length=100)
+    editing_revision: int | None = Field(None, ge=1)
+    search_radius_m: float = Field(4000, ge=500, le=8000)
+    traverse_meur_per_km: float = Field(2, ge=0, le=50)
+    max_slope_deg: float = Field(8, ge=2, le=20)
+    clearance_m: float = Field(300, ge=50, le=2000)
+    optimization_run_id: str | None = Field(None, max_length=100)
+
+
+class DraftUpdate(Input):
+    expected_version: int = Field(ge=1)
+    data: DraftData
+
+
+class ExpectedDraftVersion(Input):
+    expected_version: int = Field(ge=1)
 
 
 class NoticeUpdate(Input):
@@ -615,6 +637,90 @@ def brief(body: BriefRequest, who: IdentityDep):
     }
 
 
+@app.get("/api/drafts")
+def list_drafts(who: IdentityDep):
+    return drafts.listing(store, who)
+
+
+@app.post("/api/drafts")
+def create_draft(body: DraftData, who: IdentityDep, idempotency_key: Key = None):
+    if body.editing_plan_id:
+        who.require(
+            "plans:write", private_plan(body.editing_plan_id, who)["operator_id"]
+        )
+    return drafts.create(store, who, body.model_dump(mode="json"), idempotency_key)
+
+
+@app.get("/api/drafts/{draft_id}")
+def get_draft(draft_id: str, who: IdentityDep):
+    return drafts.get(store, who, draft_id)
+
+
+@app.patch("/api/drafts/{draft_id}")
+def save_draft(draft_id: str, body: DraftUpdate, who: IdentityDep):
+    if body.data.editing_plan_id:
+        who.require(
+            "plans:write", private_plan(body.data.editing_plan_id, who)["operator_id"]
+        )
+    return drafts.update(
+        store, who, draft_id, body.expected_version, body.data.model_dump(mode="json")
+    )
+
+
+@app.post("/api/drafts/{draft_id}/archive")
+def archive_draft(draft_id: str, body: ExpectedDraftVersion, who: IdentityDep):
+    return drafts.update(store, who, draft_id, body.expected_version, status="archived")
+
+
+@app.post("/api/drafts/{draft_id}/restore")
+def restore_draft(draft_id: str, body: ExpectedDraftVersion, who: IdentityDep):
+    return drafts.update(store, who, draft_id, body.expected_version, status="draft")
+
+
+@app.post("/api/drafts/{draft_id}/file", response_model=FiledOut)
+def file_draft(
+    draft_id: str,
+    body: ExpectedDraftVersion,
+    who: IdentityDep,
+    idempotency_key: Key = None,
+):
+    who.require("plans:write")
+    if not idempotency_key:
+        raise HTTPException(400, "Idempotency-Key required")
+    draft = drafts.get(store, who, draft_id)
+    if draft["status"] == "filed":
+        # A completed conversion is stable under network retries; never duplicate the plan.
+        p = store.plan(draft["filed_plan_id"])
+        return {
+            "plan": p,
+            "notices_sent": sum(
+                n.get("revision_id") == p.get("revision_id") for n in store.notices()
+            ),
+        }
+    if draft["status"] != "draft" or draft["version"] != body.expected_version:
+        raise Conflict("Draft is archived or has changed; reload it before filing")
+    d = draft["data"]
+    dates = d["window"].split(" / ")
+    params = {
+        "operator_id": who.organization_id,
+        "name": d["name"],
+        "window": d["window"],
+        "lander": d["lander"],
+        "site": d["site"],
+        "expected_revision": d.get("editing_revision"),
+    }
+    if len(dates) == 2:
+        params.update(window_start=dates[0], window_end=dates[1])
+    try:
+        plan = PlanIn(**params)
+    except Exception as e:
+        raise HTTPException(
+            422,
+            "Complete the mission name, valid parameters and UTC window before filing",
+        ) from e
+    return file_plan(plan, who, idempotency_key, d.get("editing_plan_id"), draft)
+
+
 @app.get("/api/plans", response_model=list[PlanOut])
 def plans(who: IdentityDep):
     who.require("private:read")
@@ -626,7 +732,7 @@ def plans(who: IdentityDep):
     ]
 
 
-def file_plan(body, who, key, plan_id=None):
+def file_plan(body, who, key, plan_id=None, draft=None):
     who.require("plans:write", body.operator_id)
     if not key:
         raise HTTPException(400, "Idempotency-Key required")
@@ -683,6 +789,7 @@ def file_plan(body, who, key, plan_id=None):
     }
     notices = copilot.notices_for_plan(plan, result, a, store.operators(), previous)
     snapshot = {
+        "source_draft": draft,
         "assessment": result,
         "inputs": body.model_dump(mode="json"),
         "assets": a,
@@ -699,7 +806,9 @@ def file_plan(body, who, key, plan_id=None):
         plan_id,
         key,
         body.expected_revision,
-        body.model_dump(mode="json"),
+        {**body.model_dump(mode="json"), "draft_id": draft["id"] if draft else None},
+        draft_id=draft["id"] if draft else None,
+        draft_version=draft["version"] if draft else None,
     )
     created = [
         n for n in store.notices() if n.get("revision_id") == saved["revision_id"]

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   api,
   type Assessment,
+  type DraftData,
   type Asset,
   type Brief,
   type Footprint,
@@ -63,6 +64,14 @@ interface Mission {
   signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
   signOut: () => Promise<void>;
 
+  draftId: string | null;
+  draftVersion: number;
+  draftFingerprint: string;
+  draftStatus: "local" | "saving" | "saved" | "filed" | "error";
+  draftError: string | null;
+  saveDraft: () => Promise<string | null>;
+  openDraft: (id: string) => Promise<void>;
+  newDraft: () => Promise<void>;
   sessionEpoch: number;
   clearPrivate: () => void;
   missionReady: boolean;
@@ -126,7 +135,7 @@ interface Mission {
   clearance: number;
   setMode: (mode: Mode) => void;
   load: () => Promise<void>;
-  loadTerrain:()=>Promise<void>;
+  loadTerrain: () => Promise<void>;
   refresh: () => Promise<void>;
   switchOperator: (id: string) => Promise<void>;
   updateLander: (patch: Partial<LanderParams>, presetId?: string) => void;
@@ -152,6 +161,11 @@ interface Mission {
 
 function privateDefaults() {
   return {
+    draftId: null,
+    draftVersion: 0,
+    draftFingerprint: "",
+    draftStatus: "local" as const,
+    draftError: null,
     missionReady: false,
     missionName: "",
     site: { ...DEFAULT_SITE },
@@ -197,8 +211,155 @@ function privateDefaults() {
     registryFilter: { operator: "all", type: "all", region: "all" },
   };
 }
+export const draftSignature = (v: DraftData) =>
+  JSON.stringify(v, (_, x) =>
+    x && typeof x === "object" && !Array.isArray(x)
+      ? Object.fromEntries(
+          Object.entries(x).sort(([a], [b]) => a.localeCompare(b)),
+        )
+      : x,
+  );
+export function draftData(s: Mission): DraftData {
+  return {
+    name: s.missionName,
+    window: s.window,
+    mission_ready: s.missionReady,
+    lander: s.lander,
+    site: s.site,
+    editing_plan_id: s.editingPlanId,
+    editing_revision: s.editingRevision,
+    search_radius_m: s.searchRadius,
+    traverse_meur_per_km: s.traverseCost,
+    max_slope_deg: s.maxSlope,
+    clearance_m: s.clearance,
+    optimization_run_id: null,
+  };
+}
+let pendingDraft: Promise<string | null> | null = null;
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
+  draftId: null,
+  draftVersion: 0,
+  draftFingerprint: "",
+  draftStatus: "local",
+  draftError: null,
+  newDraft: async () => {
+    const s = get();
+    if (s.draftId && s.draftStatus !== "filed") {
+      const saved = await s.saveDraft();
+      if (!saved) return;
+    }
+    const fresh = privateDefaults();
+    set({
+      missionName: "",
+      missionReady: false,
+      lander: fresh.lander,
+      site: fresh.site,
+      window: fresh.window,
+      assessment: null,
+      footprint: null,
+      optimization: null,
+      brief: null,
+      preview: null,
+      selectedAsset: null,
+      draftId: null,
+      draftVersion: 0,
+      draftFingerprint: "",
+      draftStatus: "local",
+      draftError: null,
+      editingPlanId: null,
+      editingRevision: null,
+      revision: get().revision + 1,
+    });
+    get().setMode("setup");
+    await get().saveDraft();
+  },
+  openDraft: async (id) => {
+    const epoch = get().sessionEpoch;
+    try {
+      const d = await api.getDraft(id);
+      if (get().sessionEpoch !== epoch) return;
+      if (d.status !== "draft")
+        throw new Error(
+          "Restore this archived draft or open its filed proposal.",
+        );
+      const v = d.data;
+      set({
+        missionName: v.name,
+        window: v.window,
+        missionReady: v.mission_ready,
+        lander: v.lander,
+        site: v.site,
+        presetId: "custom",
+        editingPlanId: v.editing_plan_id,
+        editingRevision: v.editing_revision,
+        searchRadius: v.search_radius_m,
+        traverseCost: v.traverse_meur_per_km,
+        maxSlope: v.max_slope_deg,
+        clearance: v.clearance_m,
+        draftId: d.id,
+        draftVersion: d.version,
+        draftFingerprint: draftSignature(v),
+        draftStatus: "saved",
+        draftError: null,
+        assessment: null,
+        footprint: null,
+        optimization: null,
+        brief: null,
+        preview: null,
+        selectedAsset: null,
+        revision: get().revision + 1,
+      });
+      get().setMode("setup");
+    } catch (e) {
+      if (epoch === get().sessionEpoch)
+        set({ draftStatus: "error", draftError: String(e) });
+    }
+  },
+  saveDraft: async () => {
+    const requestEpoch = get().sessionEpoch;
+    if (pendingDraft) {
+      await pendingDraft;
+      if (get().sessionEpoch !== requestEpoch) return null;
+      if (get().user) return get().saveDraft();
+      return null;
+    }
+    const s = get(),
+      epoch = s.sessionEpoch;
+    if (
+      !s.user ||
+      !s.session?.permissions.includes("plans:write") ||
+      s.draftStatus === "filed"
+    )
+      return null;
+    const data = draftData(s),
+      fingerprint = draftSignature(data);
+    if (s.draftId && fingerprint === s.draftFingerprint) return s.draftId;
+    set({ draftStatus: "saving", draftError: null });
+    pendingDraft = (async () => {
+      try {
+        const d = s.draftId
+          ? await api.updateDraft(s.draftId, data, s.draftVersion)
+          : await api.createDraft(data);
+        if (get().sessionEpoch !== epoch) return null;
+        set({
+          draftId: d.id,
+          draftVersion: d.version,
+          draftFingerprint: draftSignature(data),
+          draftStatus: "saved",
+          draftError: null,
+        });
+        return d.id;
+      } catch (e) {
+        if (get().sessionEpoch === epoch)
+          set({ draftStatus: "error", draftError: String(e) });
+        return null;
+      }
+    })();
+    const result = await pendingDraft;
+    pendingDraft = null;
+    return result;
+  },
   sessionEpoch: 0,
   clearPrivate: () => {
     api.cancelRequests();
@@ -222,7 +383,7 @@ export const useMission = create<Mission>((set, get) => ({
       actingId: session.organization_id!,
       authChecked: true,
     });
-    if(!get().terrain)void get().loadTerrain();
+    if (!get().terrain) void get().loadTerrain();
   },
   signIn: async (email, password) => {
     get().applySession(await api.login(email, password));
@@ -233,6 +394,7 @@ export const useMission = create<Mission>((set, get) => ({
     await get().refresh();
   },
   signOut: async () => {
+    if (get().draftId && get().draftStatus !== "filed") await get().saveDraft();
     get().clearPrivate();
     const epoch = get().sessionEpoch;
     try {
@@ -383,10 +545,15 @@ export const useMission = create<Mission>((set, get) => ({
       });
     }
   },
-  loadTerrain:async()=>{
-    const epoch=get().sessionEpoch;
-    try{const terrain=await api.terrainMesh();if(epoch===get().sessionEpoch)set({terrain,terrainError:null});}
-    catch(e){if(epoch===get().sessionEpoch)set({terrainError:`Terrain unavailable. ${String(e)}`});}
+  loadTerrain: async () => {
+    const epoch = get().sessionEpoch;
+    try {
+      const terrain = await api.terrainMesh();
+      if (epoch === get().sessionEpoch) set({ terrain, terrainError: null });
+    } catch (e) {
+      if (epoch === get().sessionEpoch)
+        set({ terrainError: `Terrain unavailable. ${String(e)}` });
+    }
   },
   refresh: async () => {
     const actingId = get().actingId,
@@ -589,7 +756,7 @@ export const useMission = create<Mission>((set, get) => ({
   },
   filePlan: async () => {
     const epoch = get().sessionEpoch;
-    const { lander, site, actingId, missionName, window, revision } = get();
+    const { missionName, window, revision } = get();
     if (
       !get().assessment ||
       !missionName.trim() ||
@@ -599,22 +766,21 @@ export const useMission = create<Mission>((set, get) => ({
       return null;
     set({ busy: "submit", error: null });
     try {
-      const payload = {
-        lander,
-        site,
-        operator_id: actingId,
-        name: missionName,
-        window,
-      };
-      const editing = get().editingPlanId;
-      const r = editing
-        ? await api.revisePlan(editing, {
-            ...payload,
-            expected_revision: get().editingRevision ?? 1,
-          })
-        : await api.submitPlan(payload);
+      const draftId = await get().saveDraft();
       if (get().sessionEpoch !== epoch) return null;
-      set({ editingPlanId: r.plan.id, editingRevision: r.plan.revision ?? 1 });
+      if (!draftId)
+        throw new Error(get().draftError ?? "Save the draft before filing.");
+      if (get().revision !== revision)
+        throw new Error(
+          "Mission changed while saving. Review its new assessment before filing.",
+        );
+      const r = await api.fileDraft(draftId, get().draftVersion);
+      if (get().sessionEpoch !== epoch) return null;
+      set({
+        editingPlanId: r.plan.id,
+        editingRevision: r.plan.revision ?? 1,
+        draftStatus: "filed",
+      });
       if (get().revision === revision && get().sessionEpoch === epoch)
         set({ busy: null });
       get().notify(

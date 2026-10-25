@@ -1,3 +1,4 @@
+import { DraftSaveControl } from "./MissionLibrary";
 import { useMission } from "../mission";
 import { Icon } from "./Icon";
 import NumericInput from "./NumericInput";
@@ -163,6 +164,7 @@ export default function Configuration() {
         </p>
       </div>
       <div className="journey-panel-foot">
+        <DraftSaveControl />
         <button
           className="action-primary full"
           disabled={!name.trim() || !!busy}

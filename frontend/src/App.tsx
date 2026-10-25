@@ -1,3 +1,4 @@
+import { useDraftAutosave } from "./components/MissionLibrary";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useMission, type Mode } from "./mission";
 import Auth from "./components/Auth";
@@ -136,6 +137,7 @@ function Header() {
 }
 
 export default function App() {
+  useDraftAutosave();
   const mode = useMission((s) => s.mode),
     meta = useMission((s) => s.meta),
     connected = useMission((s) => s.connected),
