@@ -216,6 +216,12 @@ class BriefRequest(SiteRequest):
     optimized_site: Point | None = None
 
 
+class AskRequest(BriefRequest):
+    question: str = Field(min_length=3, max_length=300)
+    kind: Literal["why", "change", "free"] = "free"
+    asset_id: str | None = Field(None, max_length=80)
+
+
 class AssetIn(Input):
     operator_id: str
     name: str = Field(min_length=1, max_length=80)
@@ -685,6 +691,26 @@ def curves():
             ),
         },
     }
+
+
+@app.post("/api/copilot/ask", response_model=AskOut)
+def copilot_ask(body: AskRequest, who: IdentityDep):
+    """Grounded question about the current draft; same guardrails as the brief."""
+    who.require("private:read")
+    a = store.assets()
+    if body.asset_id and not any(x["id"] == body.asset_id for x in a):
+        raise HTTPException(404, "Unknown asset")
+    with computation():
+        lander = body.lander.physics()
+        base = planner.assess(terrain, lander, body.lander.dispersion_m, body.site.x, body.site.y, a)
+        opt = (
+            planner.assess(terrain, lander, body.lander.dispersion_m, body.optimized_site.x, body.optimized_site.y, a)
+            if body.optimized_site
+            else None
+        )
+    return copilot.ask(
+        body.lander.model_dump(), base, a, store.operators(), body.question, body.kind, body.asset_id, opt
+    )
 
 
 @app.post("/api/copilot/brief", response_model=BriefOut)

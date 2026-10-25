@@ -235,8 +235,8 @@ export default function Report() {
                   <Markdown text={brief.markdown} />
                   <p className="report-note">
                     Source:{" "}
-                    {brief.source === "claude"
-                      ? `Claude (${brief.model})`
+                    {brief.source !== "template"
+                      ? `${brief.source === "openai" ? "OpenAI" : "Claude"} (${brief.model})`
                       : "Deterministic offline template"}
                     . Numbers supplied by the backend physics model.
                   </p>

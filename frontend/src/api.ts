@@ -178,9 +178,24 @@ export interface Optimization {
   method?: { strategy: string; rescored: number; refined_count: number };
   compute_ms: number;
 }
+export interface StructuredBrief {
+  situation: string;
+  risks: { asset: string; risk: Risk; why: string }[];
+  actions: string[];
+  limitations: string;
+}
+export interface CopilotAnswer {
+  answer: string;
+  points: string[];
+  source: "claude" | "openai" | "template";
+  model?: string;
+  reason?: string;
+  latency_ms: number;
+}
 export interface Brief {
   markdown: string;
-  source: "claude" | "template";
+  structured?: StructuredBrief | null;
+  source: "claude" | "openai" | "template";
   model?: string;
   reason?: string;
   latency_ms: number;
@@ -526,6 +541,24 @@ export const api = {
       optimized_site: optimized_site
         ? { x: optimized_site.x, y: optimized_site.y }
         : null,
+    }),
+  ask: (
+    lander: LanderParams,
+    site: Pt,
+    optimized_site: Pt | null,
+    question: string,
+    kind: "why" | "change" | "free",
+    asset_id?: string,
+  ) =>
+    post<CopilotAnswer>("/api/copilot/ask", {
+      lander,
+      site: { x: site.x, y: site.y },
+      optimized_site: optimized_site
+        ? { x: optimized_site.x, y: optimized_site.y }
+        : null,
+      question,
+      kind,
+      ...(asset_id ? { asset_id } : {}),
     }),
   plans: () => req<Plan[]>("/api/plans"),
   submitPlan: (p: {

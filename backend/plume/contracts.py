@@ -133,7 +133,15 @@ class NoticeOut(Output):
 
 class BriefOut(Output):
     markdown: str
-    source: Literal["claude", "template"]
+    structured: dict | None = None
+    source: Literal["claude", "openai", "template"]
+    latency_ms: int
+
+
+class AskOut(Output):
+    answer: str
+    points: list[str]
+    source: Literal["claude", "openai", "template"]
     latency_ms: int
 
 
