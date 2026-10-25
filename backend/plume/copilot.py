@@ -142,6 +142,10 @@ class GuardRejected(ValueError):
     """The model answered, but the answer broke a grounding rule."""
 
 
+class QuotaExceeded(RuntimeError):
+    """The organization's AI quota is used up; no model is called."""
+
+
 def _unsupported_numbers(texts: list[str], *sources: object) -> set[str]:
     """Literal numbers in the output that do not appear in the inputs.
 
@@ -184,6 +188,8 @@ def _guarded(system: str, messages: list[dict], check) -> tuple[object, str, str
 
 
 def _fallback_reason(exc: Exception) -> str:
+    if isinstance(exc, QuotaExceeded):
+        return str(exc)
     if isinstance(exc, GuardRejected):
         return f"answer rejected by the grounding check ({exc})"
     if str(exc) == "LLM not configured":
@@ -358,6 +364,7 @@ def brief(
     assets: list[dict],
     operators: list[dict],
     optimized: dict | None = None,
+    quota_reason: str | None = None,
 ) -> dict:
     assets_by_id = {a["id"]: a for a in assets}
     ops = {o["id"]: o for o in operators}
@@ -384,6 +391,8 @@ def brief(
         return structured, text
 
     try:
+        if quota_reason:
+            raise QuotaExceeded(quota_reason)
         (structured, text), source, model, attempts = _guarded(
             SYSTEM,
             [
@@ -510,6 +519,7 @@ def ask(
     kind: str = "free",
     asset_id: str | None = None,
     optimized: dict | None = None,
+    quota_reason: str | None = None,
 ) -> dict:
     assets_by_id = {a["id"]: a for a in assets}
     ops = {o["id"]: o for o in operators}
@@ -533,6 +543,8 @@ def ask(
         return answer, points
 
     try:
+        if quota_reason:
+            raise QuotaExceeded(quota_reason)
         (answer, points), source, model, attempts = _guarded(
             ASK_SYSTEM,
             [

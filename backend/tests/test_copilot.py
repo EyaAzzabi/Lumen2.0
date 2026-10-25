@@ -156,3 +156,57 @@ class AskEndpoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiQuota(unittest.TestCase):
+    """Per-organization quota on paid model requests."""
+
+    def setUp(self):
+        self.temp = TemporaryDirectory()
+        self.old = api.store, api.settings
+        api.store = Store(Path(self.temp.name) / "state.json")
+        api.settings = auth.Settings(environment="test", demo=False)
+        self.c = TestClient(api.app, base_url="http://localhost", client=("127.0.0.1", 45000))
+        self.body = {"lander": LANDER, "site": {"x": 1500, "y": -1500}, "question": "What can I change?", "kind": "change"}
+        reply = json.dumps({"answer": "Compare alternative sites.", "points": []})
+        self.env = patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test", "OPENAI_API_KEY": "", "PLUME_LLM_PROVIDER": "",
+                                           "PLUME_AI_PER_MINUTE": "2", "PLUME_AI_PER_DAY": "50"})
+        self.mods = patch.dict(sys.modules, {"anthropic": fake_model(reply)})
+        self.env.start()
+        self.mods.start()
+
+    def tearDown(self):
+        self.mods.stop()
+        self.env.stop()
+        self.c.close()
+        api.store, api.settings = self.old
+        self.temp.cleanup()
+
+    def sign_up(self, email, org):
+        self.c.cookies.clear()
+        r = self.c.post("/api/auth/signup", json={"name": "Quota User", "email": email, "password": "test-password-long",
+                                                  "organization": "create", "organization_name": org})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.c.headers["X-Plume-CSRF"] = r.json()["csrf_token"]
+
+    def test_minute_limit_falls_back_to_template_and_is_per_organization(self):
+        self.sign_up("a@example.test", "Quota Org A")
+        sources = [self.c.post("/api/copilot/ask", json=self.body).json() for _ in range(3)]
+        self.assertEqual([s["source"] for s in sources], ["claude", "claude", "template"])
+        self.assertIn("AI quota reached for your organization (2 per minute)", sources[2]["reason"])
+        brief = self.c.post("/api/copilot/brief", json={k: self.body[k] for k in ("lander", "site")}).json()
+        self.assertEqual(brief["source"], "template")  # the brief shares the same quota
+        usage = self.c.get("/api/copilot/usage").json()
+        self.assertEqual(usage["per_minute"], {"used": 2, "limit": 2})
+        self.sign_up("b@example.test", "Quota Org B")  # another organization has its own budget
+        self.assertEqual(self.c.post("/api/copilot/ask", json=self.body).json()["source"], "claude")
+
+    def test_template_answers_are_not_counted(self):
+        self.sign_up("c@example.test", "Quota Org C")
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+            for _ in range(4):
+                self.assertEqual(self.c.post("/api/copilot/ask", json=self.body).json()["source"], "template")
+            self.assertEqual(self.c.get("/api/copilot/usage").json()["per_minute"]["used"], 0)
+
+    def test_usage_requires_sign_in(self):
+        self.assertEqual(self.c.get("/api/copilot/usage").status_code, 401)

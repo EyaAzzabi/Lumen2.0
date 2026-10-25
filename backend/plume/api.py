@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from . import copilot, planner, auth, accounts, drafts, coordination, dossier
+from . import copilot, planner, auth, accounts, drafts, coordination, dossier, ai_quota
 from .contracts import *
 from .budget import computation
 from .database import Conflict
@@ -693,6 +693,20 @@ def curves():
     }
 
 
+def _ai_quota(who, kind: str) -> str | None:
+    """Count a paid model request for the caller's organization (template answers are free)."""
+    if copilot.provider() is None:
+        return None
+    return ai_quota.reserve(store, who.organization_id, who.user_id, kind)
+
+
+@app.get("/api/copilot/usage")
+def copilot_usage(who: IdentityDep):
+    """The caller's organization AI usage against its quota."""
+    who.require("private:read")
+    return {"provider": copilot.provider(), **ai_quota.usage(store, who.organization_id)}
+
+
 @app.post("/api/copilot/ask", response_model=AskOut)
 def copilot_ask(body: AskRequest, who: IdentityDep):
     """Grounded question about the current draft; same guardrails as the brief."""
@@ -708,8 +722,10 @@ def copilot_ask(body: AskRequest, who: IdentityDep):
             if body.optimized_site
             else None
         )
+    quota = _ai_quota(who, "ask")
     return copilot.ask(
-        body.lander.model_dump(), base, a, store.operators(), body.question, body.kind, body.asset_id, opt
+        body.lander.model_dump(), base, a, store.operators(), body.question, body.kind, body.asset_id, opt,
+        quota_reason=quota,
     )
 
 
@@ -738,7 +754,9 @@ def brief(body: BriefRequest, who: IdentityDep):
             if body.optimized_site
             else None
         )
-    result = copilot.brief(body.lander.model_dump(), base, a, store.operators(), opt)
+    result = copilot.brief(
+        body.lander.model_dump(), base, a, store.operators(), opt, quota_reason=_ai_quota(who, "brief")
+    )
     return {
         **result,
         "structured_assessment": base,
