@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  Built by <b>Eya Azzabi</b>, <b>Sarah Faleh</b> and <b>[other team members]</b><br>
+  Built by <b>Eya Azzabi</b> and <b>Sarra Felah</b><br>
   IEEE CS ISTIC SB × IEEE CS SESAME SB
 </p>
 
@@ -303,8 +303,7 @@ The first start imports any older `state.json` into SQLite after validating a te
 Built for the **IEEE Lumen 2.0 hackathon**, *Beyond 2030* challenge (IEEE CS ISTIC SB × IEEE CS SESAME SB).
 
 - **Eya Azzabi** ([@EyaAzzabi](https://github.com/EyaAzzabi))
-- **Sarah Faleh** ([@sarah-falehh](https://github.com/sarah-falehh))
-- **[other team members]**
+- **Sarra Felah** ([@sarah-falehh](https://github.com/sarah-falehh))
 
 ## Limits
 
