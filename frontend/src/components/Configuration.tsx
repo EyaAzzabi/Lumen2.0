@@ -1,5 +1,6 @@
 import { useMission } from "../mission";
 import { Icon } from "./Icon";
+import { DraftStatus } from "./WorkspaceEvidence";
 import NumericInput from "./NumericInput";
 
 export function MissionFields() {
@@ -132,7 +133,8 @@ export function MissionFields() {
 
 export default function Configuration() {
   const name = useMission((s) => s.missionName),
-    busy = useMission((s) => s.busy);
+    busy = useMission((s) => s.busy),
+    loadingDraft = useMission((s) => s.draftStatus === "loading");
   return (
     <aside
       className="journey-panel prepare-panel"
@@ -146,7 +148,9 @@ export default function Configuration() {
         </p>
       </div>
       <div className="journey-panel-body">
-        <MissionFields />
+        <fieldset disabled={loadingDraft} className="draft-fields">
+          <MissionFields />
+        </fieldset>
         <button
           className="outline-button full"
           onClick={() => {
@@ -162,9 +166,10 @@ export default function Configuration() {
         </p>
       </div>
       <div className="journey-panel-foot">
+        <DraftStatus />
         <button
           className="action-primary full"
-          disabled={!name.trim() || !!busy}
+          disabled={!name.trim() || !!busy || loadingDraft}
           onClick={() => {
             useMission.setState({ missionReady: true });
             useMission.getState().setMode("operations");

@@ -13,6 +13,8 @@ test("guided workspace calculates, compares and files a real proposal", async ({
     ).ok(),
   ).toBeTruthy();
   await page.goto("/#setup");
+  await expect(page.locator(".draft-fields")).toBeEnabled();
+  await page.getByRole("button", { name: "New mission", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Analyze this mission" }),
   ).toBeDisabled();
@@ -84,6 +86,8 @@ test("failed analysis offers a working retry instead of an endless loading state
     data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
   });
   await page.goto("/#setup");
+  await expect(page.locator(".draft-fields")).toBeEnabled();
+  await page.getByRole("button", { name: "New mission", exact: true }).click();
   await page.getByLabel("MISSION IDENTIFIER").fill("Retry validation");
   await page.route("**/api/assess", (r) =>
     r.fulfill({

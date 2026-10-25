@@ -47,7 +47,16 @@ export default function PlanHistory({ planId }: { planId: string }) {
     s.updateLander(p.lander);
     s.moveSite(p.site);
     useMission.setState({
-      missionReady:true,editingPlanId: p.id,
+      missionReady: true,
+      editingPlanId: p.id,
+      selectedAsset: null,
+      resolutionNoticeId: null,
+      assetLimits: Object.entries(p.protection?.limits ?? {}).map(
+        ([asset_id, max_damage_fraction]) => ({
+          asset_id,
+          max_damage_fraction,
+        }),
+      ),
       editingRevision: p.revision ?? 1,
       missionName: p.name,
       window: p.window,
@@ -60,6 +69,62 @@ export default function PlanHistory({ planId }: { planId: string }) {
       aria-label="Plan revision history"
     >
       <span className="panel-subtitle">REVISION & COORDINATION HISTORY</span>
+      {detail && (
+        <button
+          className="outline-button full"
+          onClick={() => {
+            const url = URL.createObjectURL(
+              new Blob(
+                [
+                  JSON.stringify(
+                    {
+                      exported_at: new Date().toISOString(),
+                      scope:
+                        "Visible plan history for the authenticated organization",
+                      ...detail,
+                    },
+                    null,
+                    2,
+                  ),
+                ],
+                { type: "application/json" },
+              ),
+            );
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `plume-${detail.plan.id}-r${detail.plan.revision ?? 1}-evidence.json`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}
+        >
+          Download coordination evidence
+        </button>
+      )}
+      {detail?.plan.protection &&
+        Object.keys(detail.plan.protection.limits).length > 0 && (
+          <details className="journey-details">
+            <summary>Filed protection constraints</summary>
+            <p>
+              {detail.plan.protection.metric}. Checked again by the server when
+              filed.
+            </p>
+            {Object.entries(detail.plan.protection.limits).map(
+              ([id, limit]) => (
+                <p key={id}>
+                  {id}:{" "}
+                  {(100 * (detail.plan.protection?.values[id] ?? 0)).toFixed(2)}
+                  % / maximum {(100 * limit).toFixed(2)}%
+                </p>
+              ),
+            )}
+            <p>
+              Source objection:{" "}
+              {detail.plan.protection.resolution_notice_id ??
+                "manually selected constraints"}
+              . Explicit acknowledgement remains required.
+            </p>
+          </details>
+        )}
       {error && (
         <p className="inline-error" role="alert">
           {error}

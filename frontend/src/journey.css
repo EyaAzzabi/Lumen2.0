@@ -1088,3 +1088,72 @@
     font-size: 11px;
   }
 }
+.draft-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.draft-status {
+  font-size: 10px;
+  color: #8eafbd;
+  line-height: 1.7;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+.draft-status p {
+  color: #ffa080;
+  margin: 8px 0;
+}
+.resolution-card {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #48bcd944;
+  border-radius: 12px;
+  background: #0a1e2b;
+}
+.resolution-card h3 {
+  font-size: 17px;
+  line-height: 1.4;
+}
+.resolution-card p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.resolution-card blockquote {
+  margin: 14px 0;
+  padding: 10px 12px;
+  border-left: 2px solid #f6ab59;
+  color: #dfc6ac;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.resolution-card input,
+.resolution-card select {
+  width: 100%;
+  min-width: 0;
+}
+.protection-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #abd6e21a;
+}
+.protection-row b {
+  font-size: 12px;
+}
+.protection-row small {
+  font-size: 11px;
+  color: #a0bbc7;
+}
+.scientific-evidence {
+  margin-bottom: 18px;
+}
+.scientific-evidence p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #b3c5cd;
+}
+.scientific-evidence a {
+  font-size: 11px;
+  color: #68d9ef;
+}

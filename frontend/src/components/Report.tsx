@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { fmtKm, fmtMeur, fmtPct } from "../api";
 import { useMission } from "../mission";
 import { Markdown } from "../ui";
+import { ScientificEvidence } from "./WorkspaceEvidence";
 import { Icon } from "./Icon";
 
 export default function Report() {
@@ -75,9 +76,10 @@ export default function Report() {
             Generated{" "}
             {new Date(timestamp).toLocaleString("en-GB", { timeZone: "UTC" })}{" "}
             UTC · {plans.filter((p) => p.operator_id === acting).length} filed
-            proposals in this organization’s demo registry
+            proposals in this organization’s registry
           </p>
         </div>
+        <ScientificEvidence />
         {!assessment ? (
           <div className="report-empty">
             <Icon name="TriangleAlert" />
@@ -303,6 +305,7 @@ export default function Report() {
             className="action-text"
             onClick={() =>
               useMission.setState({
+                resolutionNoticeId: null,
                 editingPlanId: null,
                 editingRevision: null,
               })

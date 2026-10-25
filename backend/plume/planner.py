@@ -141,10 +141,25 @@ def optimize(
     clearance_m: float = 300.0,
     strategy: str = "improved",
     dispersion_margin_sigma: float = 0.0,
+    asset_limits: dict[str, float] | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     if strategy not in ("baseline", "improved"):
         raise ValueError("Unknown optimizer strategy")
+    asset_limits = asset_limits or {}
+    known = {a["id"] for a in assets}
+    if set(asset_limits) - known or any(
+        not np.isfinite(v) or not 0 <= v <= 1 for v in asset_limits.values()
+    ):
+        raise ValueError("Invalid asset protection constraints")
+
+    def passes_limits(results):
+        return all(
+            r["damage_fraction"] <= asset_limits.get(r["asset_id"], 1.0)
+            for r in results
+        )
+
+    constraint_rejections = 0
     effective_clearance = clearance_m + dispersion_margin_sigma * dispersion_m
     step = search_radius_m / 24
     g = np.arange(-search_radius_m, search_radius_m + 1e-6, step)
@@ -178,12 +193,17 @@ def optimize(
     cost = np.where(feasible, loss + traverse, np.inf)
 
     # Stage 2: re-score the best few including landing dispersion.
-    order = np.argsort(cost)[: (8 if strategy == "baseline" else 32)]
+    order = np.argsort(cost)[
+        : (128 if asset_limits else (8 if strategy == "baseline" else 32))
+    ]
     shortlist = []
     for i in order:
         if not np.isfinite(cost[i]):
             break
         res = assess_assets(terrain, lander, dispersion_m, cx[i], cy[i], assets)
+        if not passes_limits(res):
+            constraint_rejections += 1
+            continue
         s = _summary(res)
         shortlist.append(
             {
@@ -249,6 +269,9 @@ def optimize(
                 ):
                     continue
                 res = assess_assets(terrain, lander, dispersion_m, x, y, assets)
+                if not passes_limits(res):
+                    constraint_rejections += 1
+                    continue
                 summary = _summary(res)
                 travel = moved / 1000 * traverse_meur_per_km
                 shortlist.append(
@@ -311,6 +334,14 @@ def optimize(
         )
     ]
     return {
+        "protection_constraints": {
+            "limits": asset_limits,
+            "metric": "mean modeled damage fraction over touchdown samples",
+            "rejected_evaluated_sites": constraint_rejections,
+            "baseline_passes": passes_limits(baseline["assets"]),
+            "best_passes": passes_limits(best["assets"]) if best else None,
+            "scope": "evaluated shortlist only; not a safety guarantee or proof of infeasibility",
+        },
         "target": baseline,
         "best": best,
         "best_traverse_meur": shortlist[0]["traverse_meur"] if shortlist else None,

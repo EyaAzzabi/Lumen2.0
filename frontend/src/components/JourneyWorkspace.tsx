@@ -1,3 +1,7 @@
+import ObjectionResolution, {
+  ProtectionConstraints,
+} from "./ObjectionResolution";
+import { DraftStatus, ScientificEvidence } from "./WorkspaceEvidence";
 import {
   useEffect,
   useMemo,
@@ -79,6 +83,40 @@ export function JourneyRail() {
             : "Start with a name and a vehicle"}
         </small>
       </div>
+      <button
+        className="action-text"
+        disabled={useMission((s) => s.draftStatus) === "loading"}
+        onClick={() => {
+          const s = useMission.getState();
+          useMission.setState({
+            missionName: "",
+            missionReady: false,
+            editingPlanId: null,
+            editingRevision: null,
+            resolutionNoticeId: null,
+            assetLimits: [],
+            selectedAsset: null,
+            assessment: null,
+            footprint: null,
+            optimization: null,
+            brief: null,
+            preview: null,
+            lander: {
+              label: "Light robotic lander",
+              thrust_kn: 4,
+              hover_s: 25,
+              dispersion_m: 150,
+            },
+            presetId: "clps",
+            site: { x: 0, y: 0 },
+            revision: s.revision + 1,
+            window: `${new Date(Date.now() + 3600000).toISOString()} / ${new Date(Date.now() + 7200000).toISOString()}`,
+          });
+          s.setMode("setup");
+        }}
+      >
+        New mission
+      </button>
       <details className="journey-more">
         <summary>More tools</summary>
         {(
@@ -384,6 +422,7 @@ export function AnalysisWorkspace() {
         </div>
       </div>
       <div className="journey-panel-body">
+        <ScientificEvidence />
         {!assessment ? (
           <div className="journey-loading">
             {busy && <span className="spin" />}
@@ -539,6 +578,7 @@ export function AnalysisWorkspace() {
                     </p>
                   </div>
                 )}
+                <ProtectionConstraints />
                 <details className="journey-details">
                   <summary>Search preferences</summary>
                   {(
@@ -764,6 +804,7 @@ export function AnalysisWorkspace() {
         )}
       </div>
       <div className="journey-panel-foot">
+        <DraftStatus />
         {tab === "summary" || tab === "asset" ? (
           <button
             className="action-primary full"
@@ -885,6 +926,14 @@ export function CoordinationWorkspace() {
     s.moveSite(plan.site);
     useMission.setState({
       missionReady: true,
+      resolutionNoticeId: null,
+      assetLimits: Object.entries(plan.protection?.limits ?? {}).map(
+        ([asset_id, max_damage_fraction]) => ({
+          asset_id,
+          max_damage_fraction,
+        }),
+      ),
+      selectedAsset: null,
       missionName: plan.name,
       window: plan.window,
       editingPlanId: plan.id,
@@ -967,6 +1016,7 @@ export function CoordinationWorkspace() {
                 className="action-text full"
                 onClick={() =>
                   useMission.setState({
+                    resolutionNoticeId: null,
                     editingPlanId: null,
                     editingRevision: null,
                   })
@@ -1107,6 +1157,13 @@ export function CoordinationWorkspace() {
                     </>
                   )}
               </>
+            )}
+            {plan?.operator_id === acting && plan.status !== "withdrawn" && (
+              <ObjectionResolution
+                key={`${plan.id}:${plan.revision}`}
+                plan={plan}
+                notices={current}
+              />
             )}
             {plan?.operator_id === acting && plan.status !== "withdrawn" && (
               <button className="outline-button full" onClick={revise}>
