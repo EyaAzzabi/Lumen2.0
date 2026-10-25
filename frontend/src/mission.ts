@@ -63,6 +63,8 @@ interface Mission {
   signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
   signOut: () => Promise<void>;
 
+  sessionEpoch: number;
+  clearPrivate: () => void;
   missionReady: boolean;
   preview: {
     site: Pt;
@@ -124,6 +126,7 @@ interface Mission {
   clearance: number;
   setMode: (mode: Mode) => void;
   load: () => Promise<void>;
+  loadTerrain:()=>Promise<void>;
   refresh: () => Promise<void>;
   switchOperator: (id: string) => Promise<void>;
   updateLander: (patch: Partial<LanderParams>, presetId?: string) => void;
@@ -147,26 +150,80 @@ interface Mission {
   assetPick: Pt | null;
 }
 
+function privateDefaults() {
+  return {
+    missionReady: false,
+    missionName: "",
+    site: { ...DEFAULT_SITE },
+    lander: {
+      label: "Light robotic lander",
+      thrust_kn: 4,
+      hover_s: 25,
+      dispersion_m: 150,
+    },
+    presetId: "clps",
+    window: `${new Date(Date.now() + 3600000).toISOString()} / ${new Date(Date.now() + 7200000).toISOString()}`,
+    plans: [],
+    notices: [],
+    assessment: null,
+    footprint: null,
+    optimization: null,
+    brief: null,
+    assessedAt: null,
+    editingPlanId: null,
+    editingRevision: null,
+    selectedAsset: null,
+    preview: null,
+    busy: null,
+    error: null,
+    toast: null,
+    coordinationError: null,
+    focusPlanId: null,
+    undoSite: null,
+    pickingAsset: false,
+    assetPick: null,
+    placeMode: false,
+    playing: false,
+    replay: 0,
+    tour: false,
+    demo: false,
+    demoStep: 0,
+    demoPlanId: null,
+    demoRecipient: null,
+    searchRadius: 4000,
+    traverseCost: 2,
+    maxSlope: 8,
+    clearance: 300,
+    registryFilter: { operator: "all", type: "all", region: "all" },
+  };
+}
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
+  sessionEpoch: 0,
+  clearPrivate: () => {
+    api.cancelRequests();
+    clearTimeout(toastTimer);
+    set({
+      ...privateDefaults(),
+      revision: get().revision + 1,
+      sessionEpoch: get().sessionEpoch + 1,
+    });
+  },
   user: null,
   organization: null,
   authChecked: false,
   afterLogin: "setup",
-  applySession: (session) =>
+  applySession: (session) => {
+    get().clearPrivate();
     set({
       session,
       user: session.user,
       organization: session.organization,
       actingId: session.organization_id!,
-      plans: [],
-      notices: [],
-      editingPlanId: null,
-      editingRevision: null,
-      missionReady: false,
-      preview: null,
-      coordinationError: null,
-    }),
+      authChecked: true,
+    });
+    if(!get().terrain)void get().loadTerrain();
+  },
   signIn: async (email, password) => {
     get().applySession(await api.login(email, password));
     await get().refresh();
@@ -176,9 +233,12 @@ export const useMission = create<Mission>((set, get) => ({
     await get().refresh();
   },
   signOut: async () => {
+    get().clearPrivate();
+    const epoch = get().sessionEpoch;
     try {
       await api.logout();
     } finally {
+      if (get().sessionEpoch !== epoch) return;
       set({
         session: null,
         user: null,
@@ -284,6 +344,7 @@ export const useMission = create<Mission>((set, get) => ({
       get().focus("overview");
   },
   load: async () => {
+    const epoch = get().sessionEpoch;
     set({ loadError: null });
     try {
       const [meta, assets, operators] = await Promise.all([
@@ -291,8 +352,10 @@ export const useMission = create<Mission>((set, get) => ({
         api.assets(),
         api.operators(),
       ]);
+      if (get().sessionEpoch !== epoch) return;
       set({ meta, assets, operators, connected: true });
       const session = await api.session();
+      if (get().sessionEpoch !== epoch) return;
       set({
         session,
         user: session.user ?? null,
@@ -303,21 +366,31 @@ export const useMission = create<Mission>((set, get) => ({
       if (session.user) void get().refresh();
       else if (!PUBLIC_MODES.includes(get().mode)) get().setMode(get().mode);
     } catch (e) {
+      if (get().sessionEpoch !== epoch) return;
       set({
         connected: false,
         loadError: `Mission data unavailable. ${String(e)}`,
       });
     }
     try {
-      set({ terrain: await api.terrainMesh(), terrainError: null });
+      const terrain = await api.terrainMesh();
+      if (get().sessionEpoch !== epoch) return;
+      set({ terrain, terrainError: null });
     } catch {
+      if (get().sessionEpoch !== epoch) return;
       set({
         terrainError: "3D terrain unavailable. The 2D map remains operational.",
       });
     }
   },
+  loadTerrain:async()=>{
+    const epoch=get().sessionEpoch;
+    try{const terrain=await api.terrainMesh();if(epoch===get().sessionEpoch)set({terrain,terrainError:null});}
+    catch(e){if(epoch===get().sessionEpoch)set({terrainError:`Terrain unavailable. ${String(e)}`});}
+  },
   refresh: async () => {
-    const actingId = get().actingId;
+    const actingId = get().actingId,
+      epoch = get().sessionEpoch;
     if (!get().session?.authenticated) return;
     try {
       const [assets, plans, notices, operators] = await Promise.all([
@@ -326,7 +399,7 @@ export const useMission = create<Mission>((set, get) => ({
         api.notices(actingId),
         api.operators(),
       ]);
-      if (get().actingId !== actingId) return;
+      if (get().actingId !== actingId || get().sessionEpoch !== epoch) return;
       const changed = JSON.stringify(assets) !== JSON.stringify(get().assets);
       set((s) => ({
         assets,
@@ -349,41 +422,24 @@ export const useMission = create<Mission>((set, get) => ({
           : {}),
       }));
     } catch (e) {
-      if (get().actingId === actingId)
+      if (get().actingId === actingId && get().sessionEpoch === epoch)
         set({
           coordinationError: `Coordination data unavailable: ${String(e)}`,
         });
     }
   },
   switchOperator: async (actingId) => {
-    set({ busy: "session", coordinationError: null });
+    get().clearPrivate();
+    const epoch = get().sessionEpoch;
+    set({ busy: "session" });
     try {
       const session = await api.demoSession(actingId);
-      set((s) => ({
-        session,
-        user: session.user ?? null,
-        organization: session.organization ?? null,
-        actingId: session.organization_id!,
-        notices: [],
-        plans: [],
-        selectedAsset: null,
-        editingPlanId: null,
-        editingRevision: null,
-        busy: null,
-        registryFilter: {
-          ...s.registryFilter,
-          operator:
-            s.registryFilter.operator === s.actingId
-              ? actingId
-              : s.registryFilter.operator,
-        },
-      }));
+      if (get().sessionEpoch !== epoch) return;
+      get().applySession(session);
       await get().refresh();
     } catch (e) {
-      set({
-        busy: null,
-        coordinationError: `Session switch failed: ${String(e)}`,
-      });
+      if (get().sessionEpoch === epoch)
+        set({ busy: null, coordinationError: String(e) });
     }
   },
   updateLander: (patch, presetId = "custom") =>
@@ -432,6 +488,7 @@ export const useMission = create<Mission>((set, get) => ({
     if (selectedAsset) get().focus("asset");
   },
   analyze: async () => {
+    const epoch = get().sessionEpoch;
     const { lander, site, revision, connected } = get();
     if (!connected || !get().missionReady) return false;
     set({ busy: "analysis", error: null, assessment: null, footprint: null });
@@ -440,7 +497,8 @@ export const useMission = create<Mission>((set, get) => ({
         api.assess(lander, site),
         api.footprint(lander, site),
       ]);
-      if (get().revision !== revision) return false;
+      if (get().revision !== revision || get().sessionEpoch !== epoch)
+        return false;
       set({
         assessment,
         footprint,
@@ -449,12 +507,13 @@ export const useMission = create<Mission>((set, get) => ({
       });
       return true;
     } catch (e) {
-      if (get().revision === revision)
+      if (get().revision === revision && get().sessionEpoch === epoch)
         set({ error: `Assessment failed: ${String(e)}`, busy: null });
       return false;
     }
   },
   optimize: async () => {
+    const epoch = get().sessionEpoch;
     const {
       lander,
       site,
@@ -472,7 +531,7 @@ export const useMission = create<Mission>((set, get) => ({
         max_slope_deg: maxSlope,
         clearance_m: clearance,
       });
-      if (get().revision === revision) {
+      if (get().revision === revision && get().sessionEpoch === epoch) {
         set({
           optimization,
           busy: null,
@@ -481,30 +540,45 @@ export const useMission = create<Mission>((set, get) => ({
         get().focus("overview");
       }
     } catch (e) {
-      if (get().revision === revision)
+      if (get().revision === revision && get().sessionEpoch === epoch)
         set({ error: `Optimizer failed: ${String(e)}`, busy: null });
     }
   },
   generateBrief: async () => {
-    const { lander, site, optimization, revision } = get();
+    const epoch = get().sessionEpoch;
+    const { lander, site, optimization, revision, assessment } = get();
+    if (
+      !assessment ||
+      assessment.site.x !== site.x ||
+      assessment.site.y !== site.y
+    ) {
+      set({ error: "Assess the current site before generating a briefing." });
+      return;
+    }
     set({ busy: "brief", error: null });
     try {
       const brief = await api.brief(
         lander,
-        optimization?.target.site ?? site,
-        optimization?.best?.site ?? null,
+        site,
+        optimization?.target.site.x === site.x &&
+          optimization?.target.site.y === site.y
+          ? (optimization.best?.site ?? null)
+          : null,
       );
-      if (get().revision === revision) set({ brief, busy: null });
+      if (get().revision === revision && get().sessionEpoch === epoch)
+        set({ brief, busy: null });
     } catch (e) {
-      if (get().revision === revision) set({ error: String(e), busy: null });
+      if (get().revision === revision && get().sessionEpoch === epoch)
+        set({ error: String(e), busy: null });
     }
   },
   simulate: async () => {
+    const epoch = get().sessionEpoch;
     get().setMode("simulation");
     const revision = get().revision;
     const ok =
       get().assessment && get().footprint ? true : await get().analyze();
-    if (ok && revision === get().revision) {
+    if (ok && revision === get().revision && epoch === get().sessionEpoch) {
       set({
         replay: get().reducedMotion ? REPLAY_DURATION : 0,
         playing: !get().reducedMotion,
@@ -514,6 +588,7 @@ export const useMission = create<Mission>((set, get) => ({
     }
   },
   filePlan: async () => {
+    const epoch = get().sessionEpoch;
     const { lander, site, actingId, missionName, window, revision } = get();
     if (
       !get().assessment ||
@@ -538,15 +613,18 @@ export const useMission = create<Mission>((set, get) => ({
             expected_revision: get().editingRevision ?? 1,
           })
         : await api.submitPlan(payload);
+      if (get().sessionEpoch !== epoch) return null;
       set({ editingPlanId: r.plan.id, editingRevision: r.plan.revision ?? 1 });
-      if (get().revision === revision) set({ busy: null });
+      if (get().revision === revision && get().sessionEpoch === epoch)
+        set({ busy: null });
       get().notify(
         `Proposal filed · ${r.notices_sent} consultation${r.notices_sent === 1 ? "" : "s"} created.`,
       );
       await get().refresh();
       return r.plan.id;
     } catch (e) {
-      if (get().revision === revision) set({ error: String(e), busy: null });
+      if (get().revision === revision && get().sessionEpoch === epoch)
+        set({ error: String(e), busy: null });
       return null;
     }
   },
@@ -604,6 +682,7 @@ export function elevationAt(
 }
 
 api.onUnauthorized(() => {
+  useMission.getState().clearPrivate();
   useMission.setState({
     session: null,
     user: null,

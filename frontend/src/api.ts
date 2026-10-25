@@ -261,9 +261,20 @@ export interface PlanDetail {
 let session: Session | null = null;
 let unauthorized: (() => void) | null = null;
 const pendingKeys = new Map<string, string>();
+let requestEpoch = 0;
+const requests = new Set<AbortController>();
+function cancelRequests() {
+  requestEpoch++;
+  requests.forEach((c) => c.abort());
+  requests.clear();
+  pendingKeys.clear();
+}
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const epoch = requestEpoch,
+    identity = session;
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), 60_000);
+  requests.add(controller);
   const mutating = init?.method && !["GET", "HEAD"].includes(init.method);
   const signature = `${session?.organization_id}:${init?.method}:${path}:${init?.body}`;
   const idem =
@@ -282,8 +293,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          ...(session?.csrf_token
-            ? { "X-Plume-CSRF": session.csrf_token }
+          ...(identity?.csrf_token
+            ? { "X-Plume-CSRF": identity.csrf_token }
             : {}),
           ...(idem ? { "Idempotency-Key": pendingKeys.get(signature)! } : {}),
           ...(init?.headers || {}),
@@ -298,6 +309,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       await res.arrayBuffer();
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
     }
+    if (epoch !== requestEpoch)
+      throw new DOMException("Session changed", "AbortError");
     if (!res.ok) {
       let detail = res.statusText;
       try {
@@ -320,9 +333,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       throw new Error(`${res.status} ${detail}`);
     }
     if (idem) pendingKeys.delete(signature);
-    return res.json() as Promise<T>;
+    const data = await res.json();
+    if (epoch !== requestEpoch)
+      throw new DOMException("Session changed", "AbortError");
+    return data as T;
   } finally {
     clearTimeout(timer);
+    requests.delete(controller);
   }
 }
 const post = <T>(path: string, body: unknown) =>
@@ -344,6 +361,7 @@ export interface Member {
 }
 
 export const api = {
+  cancelRequests,
   members: () => req<Member[]>("/api/organization/members"),
   onUnauthorized: (callback: () => void) => {
     unauthorized = callback;
@@ -353,6 +371,7 @@ export const api = {
     return session;
   },
   login: async (email: string, password: string) => {
+    cancelRequests();
     session = await post<AuthSession>("/api/auth/login", { email, password });
     return session as AuthSession;
   },
@@ -364,6 +383,7 @@ export const api = {
     organization_name?: string;
     invite_code?: string;
   }) => {
+    cancelRequests();
     session = await post<AuthSession>("/api/auth/signup", body);
     return session as AuthSession;
   },
@@ -382,6 +402,7 @@ export const api = {
     const account = accounts.find((a) => a.operator_id === operator_id);
     if (!account)
       throw new Error("This organization requires its own account credentials");
+    cancelRequests();
     session = await post<AuthSession>("/api/auth/login", {
       email: account.email,
       password: account.password,

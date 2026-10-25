@@ -329,3 +329,7 @@ kbd {
 @media (max-width: 1250px) {
   .mission-toast { left: calc(50% - 120px); max-width: min(520px, 60vw); bottom: 92px; }
 }
+/* Renderer recovery is outside the canvas stacking context and never hides mission inputs. */
+.renderer-recovery{position:fixed;z-index:150;bottom:34px;left:230px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:#071724f2;border:1px solid #5acbe25c;border-radius:9px;color:#b3cdd9;font-size:11px;max-width:calc(100vw - 32px);box-sizing:border-box;}
+.renderer-recovery button{border:1px solid #58cce8;border-radius:6px;background:#123849;color:#9ce9fa;padding:8px 12px;cursor:pointer;}
+@media(max-width:700px){.renderer-recovery{left:12px;bottom:18px;}}

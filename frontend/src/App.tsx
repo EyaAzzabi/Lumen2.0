@@ -183,8 +183,12 @@ export default function App() {
     const shortcuts = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (
-        e.ctrlKey || e.metaKey || e.altKey ||
-        (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)))
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        (t &&
+          (t.isContentEditable ||
+            ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)))
       )
         return;
       const s = useMission.getState();
@@ -275,9 +279,13 @@ export default function App() {
                     {mode === "setup" ? (
                       <Configuration />
                     ) : mode === "notices" ? (
-                      <CoordinationWorkspace />
+                      <CoordinationWorkspace
+                        key={useMission.getState().sessionEpoch}
+                      />
                     ) : (
-                      <AnalysisWorkspace />
+                      <AnalysisWorkspace
+                        key={useMission.getState().sessionEpoch}
+                      />
                     )}
                   </>
                 )}
@@ -324,6 +332,12 @@ export default function App() {
         {terrainError && mode !== "gateway" && (
           <div className="terrain-error" role="status">
             {terrainError}
+            <button
+              className="action-text"
+              onClick={() => void useMission.getState().load()}
+            >
+              Retry terrain
+            </button>
           </div>
         )}
       </main>
@@ -331,7 +345,10 @@ export default function App() {
         <span>
           <span className="status-dot" />
           PLUME / OPERATIONAL PROTOTYPE
-          <button className="footer-shortcuts" onClick={() => setShortcutsOpen(true)}>
+          <button
+            className="footer-shortcuts"
+            onClick={() => setShortcutsOpen(true)}
+          >
             ? SHORTCUTS
           </button>
         </span>
@@ -348,19 +365,41 @@ export default function App() {
         <div className="pick-hint" role="status">
           <Icon name="Crosshair" size={16} />
           Click the terrain to place your new asset
-          <button onClick={() => useMission.setState({ pickingAsset: false })}>Cancel</button>
+          <button onClick={() => useMission.setState({ pickingAsset: false })}>
+            Cancel
+          </button>
         </div>
       )}
       {shortcutsOpen && (
-        <div className="shortcuts" role="dialog" aria-label="Keyboard shortcuts" onClick={() => setShortcutsOpen(false)}>
+        <div
+          className="shortcuts"
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          onClick={() => setShortcutsOpen(false)}
+        >
           <div onClick={(e) => e.stopPropagation()}>
             <b>Keyboard shortcuts</b>
             <dl>
-              <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Prepare · Analyze · Coordinate</dd>
-              <dt><kbd>O</kbd></dt><dd>Find alternative landing sites</dd>
-              <dt><kbd>R</kbd></dt><dd>Open the full report</dd>
-              <dt><kbd>Esc</kbd></dt><dd>Cancel map picking / close</dd>
-              <dt><kbd>?</kbd></dt><dd>Show or hide this help</dd>
+              <dt>
+                <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>
+              </dt>
+              <dd>Prepare · Analyze · Coordinate</dd>
+              <dt>
+                <kbd>O</kbd>
+              </dt>
+              <dd>Find alternative landing sites</dd>
+              <dt>
+                <kbd>R</kbd>
+              </dt>
+              <dd>Open the full report</dd>
+              <dt>
+                <kbd>Esc</kbd>
+              </dt>
+              <dd>Cancel map picking / close</dd>
+              <dt>
+                <kbd>?</kbd>
+              </dt>
+              <dd>Show or hide this help</dd>
             </dl>
           </div>
         </div>
@@ -370,7 +409,10 @@ export default function App() {
           <Icon name="Check" size={18} />
           {toast}
           {undoSite && (
-            <button className="toast-undo" onClick={() => useMission.getState().undoAdopt()}>
+            <button
+              className="toast-undo"
+              onClick={() => useMission.getState().undoAdopt()}
+            >
               Undo
             </button>
           )}

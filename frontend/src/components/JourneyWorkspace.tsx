@@ -38,7 +38,9 @@ export function JourneyRail() {
     name = useMission((s) => s.missionName),
     organization = useMission((s) => s.organization),
     assessed = useMission((s) => !!s.assessment),
-    filed = useMission((s) => s.plans.some((p) => p.operator_id === s.actingId));
+    filed = useMission((s) =>
+      s.plans.some((p) => p.operator_id === s.actingId),
+    );
   const done = [ready, assessed, filed];
   const index =
     mode === "setup"
@@ -115,7 +117,9 @@ export function JourneyRail() {
 function Onboarding() {
   const user = useMission((s) => s.user),
     org = useMission((s) => s.organization),
-    ownAssets = useMission((s) => s.assets.some((a) => a.operator_id === s.actingId)),
+    ownAssets = useMission((s) =>
+      s.assets.some((a) => a.operator_id === s.actingId),
+    ),
     assessed = useMission((s) => !!s.assessment);
   const key = `plume.onboarding.${org?.id}`;
   const [hidden, setHidden] = useState(() => {
@@ -127,21 +131,43 @@ function Onboarding() {
   });
   const [team, setTeam] = useState<number | null>(null);
   useEffect(() => {
-    if (user && !user.demo) api.members().then((m) => setTeam(m.length)).catch(() => setTeam(null));
+    if (user && !user.demo)
+      api
+        .members()
+        .then((m) => setTeam(m.length))
+        .catch(() => setTeam(null));
   }, [user, org?.id]);
   if (!user || user.demo || !org || hidden) return null;
   const items: [boolean, string, () => void][] = [
-    [ownAssets, "Register your first asset", () => {
-      useMission.setState({ pickingAsset: true });
-      useMission.getState().setMode("registry");
-    }],
-    [(team ?? 0) > 1, org.invite_code ? `Invite a teammate · code ${org.invite_code}` : "Invite a teammate", () => {
-      if (org.invite_code) {
-        void navigator.clipboard?.writeText(org.invite_code);
-        useMission.getState().notify(`Invite code ${org.invite_code} copied. Share it with a teammate.`);
-      }
-    }],
-    [assessed, "Run your first assessment", () => useMission.getState().setMode("setup")],
+    [
+      ownAssets,
+      "Register your first asset",
+      () => {
+        useMission.setState({ pickingAsset: true });
+        useMission.getState().setMode("registry");
+      },
+    ],
+    [
+      (team ?? 0) > 1,
+      org.invite_code
+        ? `Invite a teammate · code ${org.invite_code}`
+        : "Invite a teammate",
+      () => {
+        if (org.invite_code) {
+          void navigator.clipboard?.writeText(org.invite_code);
+          useMission
+            .getState()
+            .notify(
+              `Invite code ${org.invite_code} copied. Share it with a teammate.`,
+            );
+        }
+      },
+    ],
+    [
+      assessed,
+      "Run your first assessment",
+      () => useMission.getState().setMode("setup"),
+    ],
   ];
   const complete = items.filter((i) => i[0]).length;
   return (
@@ -499,7 +525,9 @@ export function AnalysisWorkspace() {
                   }
                 >
                   <span>
-                    <Term tip="Expected damage to all registered assets, in euros, from the physics model.">MODELED INFRASTRUCTURE LOSS</Term>
+                    <Term tip="Expected damage to all registered assets, in euros, from the physics model.">
+                      MODELED INFRASTRUCTURE LOSS
+                    </Term>
                   </span>
                   <strong>
                     {fmtMeur(assessment.summary.expected_loss_meur)}
@@ -573,7 +601,9 @@ export function AnalysisWorkspace() {
                   }
                 >
                   <span>
-                    <Term tip="Average fraction of the asset's value lost, over all possible touchdown points. Not a failure probability.">MEAN MODELED DAMAGE</Term>
+                    <Term tip="Average fraction of the asset's value lost, over all possible touchdown points. Not a failure probability.">
+                      MEAN MODELED DAMAGE
+                    </Term>
                   </span>
                   <strong>{fmtPct(result.damage_fraction)}</strong>
                   <p>
@@ -742,9 +772,9 @@ export function AnalysisWorkspace() {
                       </div>
                     </div>
                     <p className="source-line">
-                      Optimizer · {opt.search.candidates.toLocaleString()} sites screened ·{" "}
-                      {opt.search.feasible.toLocaleString()} feasible ·{" "}
-                      {(opt.compute_ms / 1000).toFixed(1)} s
+                      Optimizer · {opt.search.candidates.toLocaleString()} sites
+                      screened · {opt.search.feasible.toLocaleString()} feasible
+                      · {(opt.compute_ms / 1000).toFixed(1)} s
                       <LimitsBadge />
                     </p>
                     <dl className="data-list">
@@ -807,10 +837,14 @@ export function AnalysisWorkspace() {
                       className="outline-button full"
                       disabled={!!busy || previewBusy}
                       onClick={() => {
-                        useMission.getState().adoptSite(
-                          { x: candidate.x, y: candidate.y },
-                          candidateIndex === 0 ? "Best evaluated site" : `Alternative ${candidateIndex}`,
-                        );
+                        useMission
+                          .getState()
+                          .adoptSite(
+                            { x: candidate.x, y: candidate.y },
+                            candidateIndex === 0
+                              ? "Best evaluated site"
+                              : `Alternative ${candidateIndex}`,
+                          );
                         setTab("summary");
                       }}
                     >
@@ -970,13 +1004,6 @@ export function CoordinationWorkspace() {
       useMission.setState({ focusPlanId: null });
     }
   }, [focusPlanId]);
-  useEffect(() => {
-    if (useMission.getState().focusPlanId) return;
-    setSelected("");
-    setNoticeId("");
-    setReply("");
-    setError("");
-  }, [acting]);
   useEffect(() => {
     if (notice?.to_operator_id === acting && !notice.read_at)
       void api
@@ -1257,7 +1284,10 @@ export function CoordinationWorkspace() {
                 : "Analyze a mission first, then file it here. Proposals from other operators that affect your assets also appear here."}
             </p>
             {!assessment && (
-              <button className="outline-button full" onClick={() => useMission.getState().setMode("setup")}>
+              <button
+                className="outline-button full"
+                onClick={() => useMission.getState().setMode("setup")}
+              >
                 Prepare a mission <Icon name="ArrowRight" size={15} />
               </button>
             )}
@@ -1297,7 +1327,7 @@ function LimitsBadge() {
   return (
     <button
       className="limits-badge"
-      title="Calibrated ballistic model on synthetic terrain. Open the method page."
+      title="Simplified, experimentally uncalibrated ballistic model on synthetic terrain. Open the method page."
       onClick={() => useMission.getState().setMode("method")}
     >
       Simplified model · not flight-certified

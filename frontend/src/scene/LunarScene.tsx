@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   Component,
   Suspense,
@@ -615,11 +616,16 @@ function Candidates() {
                 onClick={() =>
                   useMission
                     .getState()
-                    .adoptSite({ x: c.x, y: c.y }, i === 0 ? "Best evaluated site" : `Alternative ${i}`)
+                    .adoptSite(
+                      { x: c.x, y: c.y },
+                      i === 0 ? "Best evaluated site" : `Alternative ${i}`,
+                    )
                 }
               >
                 {i === 0 ? "BEST SITE" : `A${i}`}
-                {i === 0 && <small>€{c.expected_loss_meur.toFixed(2)}M loss</small>}
+                {i === 0 && (
+                  <small>€{c.expected_loss_meur.toFixed(2)}M loss</small>
+                )}
               </button>
             </Html>
           </group>
@@ -957,7 +963,9 @@ function RegisteredPlans() {
             <meshBasicMaterial color="#e9bd83" transparent opacity={0.6} />
           </mesh>
           <Html position={[0, 0.2, 0]} center zIndexRange={[12, 0]}>
-            <span className="origin-label" title={p.id}>{p.name || "Filed proposal"} · r{p.revision ?? 1}</span>
+            <span className="origin-label" title={p.id}>
+              {p.name || "Filed proposal"} · r{p.revision ?? 1}
+            </span>
           </Html>
         </group>
       ))}
@@ -966,19 +974,22 @@ function RegisteredPlans() {
 }
 
 class SceneBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
+  { children: ReactNode; fallback: ReactNode; onFailure: () => void },
   { failed: boolean }
 > {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
+  componentDidCatch() {
+    this.props.onFailure();
+  }
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
   }
 }
 
-function OperationalFallback() {
+function OperationalFallback({ onRetry }: { onRetry: () => void }) {
   const meta = useMission((s) => s.meta),
     assets = useMission((s) => s.assets),
     operators = useMission((s) => s.operators),
@@ -1005,35 +1016,49 @@ function OperationalFallback() {
             footprint={footprint}
             results={assessment?.assets}
             onSiteChange={(p) => {
-              if (place) useMission.getState().moveSite(p);
+              if (useMission.getState().pickingAsset) {
+                useMission.setState({ assetPick: p, pickingAsset: false });
+              } else if (place) useMission.getState().moveSite(p);
             }}
           />
         )
       )}
-      <div className="graphics-warning">
-        2D graphics mode · real backend analysis remains available
-      </div>
+      {createPortal(
+        <div className="renderer-recovery" role="status">
+          <span>2D operational map · mission preserved</span>
+          <button onClick={onRetry}>Retry 3D</button>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
 
 export default function LunarScene() {
-  const [lost, setLost] = useState(false),
-    terrainError = useMission((s) => s.terrainError),
-    mode = useMission((s) => s.mode),
+  const [attempt, setAttempt] = useState(0),
+    [failed, setFailed] = useState(false);
+  const mode = useMission((s) => s.mode),
     low = useMission((s) => s.lowGraphics);
-  const [supported] = useState(() => {
-    try {
-      const c = document.createElement("canvas");
-      return !!c.getContext("webgl2");
-    } catch {
-      return false;
-    }
-  });
-  if (!supported || lost || (terrainError && mode !== "gateway"))
-    return <OperationalFallback />;
+  const retry = () => {
+    useMission.setState({ lowGraphics: true });
+    setFailed(false);
+    setAttempt((a) => a + 1);
+  };
+  const recover = () => {
+    if (attempt === 0) {
+      useMission.setState({ lowGraphics: true });
+      setAttempt(1);
+    } else setFailed(true);
+  };
+  // No extra capability-test GPU context: the actual renderer is the test.
+  // Canvas fallback children mount even when WebGL works; they must have no effects.
+  if (failed) return <OperationalFallback onRetry={retry} />;
   return (
-    <SceneBoundary fallback={<OperationalFallback />}>
+    <SceneBoundary
+      key={attempt}
+      onFailure={recover}
+      fallback={<OperationalFallback onRetry={retry} />}
+    >
       <Suspense
         fallback={
           <div className="scene-loading">
@@ -1047,19 +1072,20 @@ export default function LunarScene() {
           shadows={!low}
           dpr={low ? 1 : [1, 1.6]}
           camera={{ position: [0, 1, 11], fov: 43, near: 0.02, far: 180 }}
-          gl={{
-            antialias: !low,
-            powerPreference: low ? "low-power" : "high-performance",
-          }}
+          gl={{ antialias: !low, powerPreference: "default" }}
           onCreated={({ gl }) => {
-            gl.domElement.addEventListener("webglcontextlost", (e) => {
-              e.preventDefault();
-              setLost(true);
-            });
+            gl.domElement.addEventListener(
+              "webglcontextlost",
+              (e) => {
+                e.preventDefault();
+                recover();
+              },
+              { once: true },
+            );
           }}
           fallback={
             <span>
-              3D rendering is unavailable. The operational map will be used.
+              WebGL is unavailable. The operational map remains available.
             </span>
           }
         >
