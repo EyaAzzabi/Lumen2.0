@@ -57,3 +57,12 @@ the engineering guide.
 Optional Anthropic briefing uses ANTHROPIC_API_KEY and PLUME_LLM_MODEL. Without a
 credential, a labeled deterministic template works immediately offline. The
 numerical engine never depends on an LLM. No trained surrogate is implemented.
+
+## One-command Windows startup
+
+From the repository root, run `./start-plume.ps1`. It launches missing local
+services in hidden independent processes, reuses healthy services, checks the
+backend proxy, and opens http://127.0.0.1:5174/#gateway. Use `-NoBrowser` to keep
+the browser unchanged. Logs and process IDs are in `backend/data/runtime/`
+(ignored by Git). Dependencies must already be installed as described above.
+Node starts Vite directly so closing an npm terminal is unnecessary.
