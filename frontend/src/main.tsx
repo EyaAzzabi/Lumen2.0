@@ -14,6 +14,7 @@ import "./mission.css";
 import "./platform.css";
 import "./template.css";
 import "./cinematic.css";
+import "./journey.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

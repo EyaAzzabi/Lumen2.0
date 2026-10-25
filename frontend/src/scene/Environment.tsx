@@ -70,9 +70,9 @@ export function RegolithRocks() {
 }
 
 export function LandingLocator() {
-  const site = useMission((s) => s.site),
+  const site = useMission((s) => s.preview?.site ?? s.site),
     terrain = useMission((s) => s.terrain),
-    assessment = useMission((s) => s.assessment),
+    assessment = useMission((s) => s.preview?.assessment ?? s.assessment),
     busy = useMission((s) => s.busy),
     mode = useMission((s) => s.mode),
     layers = useMission((s) => s.layers);
@@ -187,7 +187,7 @@ export function OwnershipLinks() {
 }
 
 export function InspectionPad() {
-  const site = useMission((s) => s.site),
+  const site = useMission((s) => s.preview?.site ?? s.site),
     terrain = useMission((s) => s.terrain),
     spinning = useRef<Group>(null);
   useFrame((_, delta) => {

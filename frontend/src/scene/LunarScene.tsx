@@ -238,7 +238,7 @@ function TerrainSurface() {
 }
 
 function FootprintOverlay() {
-  const footprint = useMission((s) => s.footprint),
+  const footprint = useMission((s) => s.preview?.footprint ?? s.footprint),
     terrain = useMission((s) => s.terrain),
     visible = useMission((s) => s.layers.hazard);
   const mesh = useRef<Mesh>(null);
@@ -327,7 +327,9 @@ function FootprintOverlay() {
 function Infrastructure() {
   const assets = useMission((s) => s.assets),
     terrain = useMission((s) => s.terrain),
-    results = useMission((s) => s.assessment?.assets),
+    results = useMission(
+      (s) => (s.preview?.assessment ?? s.assessment)?.assets,
+    ),
     selected = useMission((s) => s.selectedAsset);
   const visible = useMission((s) => s.layers.infrastructure);
   const mode = useMission((s) => s.mode),
@@ -432,7 +434,7 @@ function Infrastructure() {
 }
 
 function LandingSite() {
-  const site = useMission((s) => s.site),
+  const site = useMission((s) => s.preview?.site ?? s.site),
     terrain = useMission((s) => s.terrain),
     dispersion = useMission((s) => s.lander.dispersion_m),
     zones = useMission((s) => s.layers.zones);
@@ -813,7 +815,8 @@ function World() {
     terrain = useMission((s) => s.terrain),
     low = useMission((s) => s.lowGraphics);
   const orbital = ["gateway", "login", "pricing"].includes(mode);
-  const inspection = mode === "setup";
+  const placing = useMission((s) => s.placeMode);
+  const inspection = mode === "setup" && !placing;
   useEffect(() => {
     scene.background = inspection ? null : new Color("#02060c");
     gl.setClearColor("#02060c", inspection ? 0 : 1);
@@ -972,9 +975,9 @@ function OperationalFallback() {
   const meta = useMission((s) => s.meta),
     assets = useMission((s) => s.assets),
     operators = useMission((s) => s.operators),
-    site = useMission((s) => s.site),
-    footprint = useMission((s) => s.footprint),
-    assessment = useMission((s) => s.assessment),
+    site = useMission((s) => s.preview?.site ?? s.site),
+    footprint = useMission((s) => s.preview?.footprint ?? s.footprint),
+    assessment = useMission((s) => s.preview?.assessment ?? s.assessment),
     mode = useMission((s) => s.mode),
     place = useMission((s) => s.placeMode);
   return (

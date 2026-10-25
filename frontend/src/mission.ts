@@ -37,7 +37,7 @@ export type Layers = Record<
   "terrain" | "infrastructure" | "zones" | "hazard" | "candidates",
   boolean
 >;
-export const DEFAULT_SITE = { x: 1500, y: -1500 };
+export const DEFAULT_SITE = { x: 0, y: 0 };
 export const REPLAY_DURATION = 24;
 export const phaseAt = (t: number) =>
   t < 4
@@ -63,6 +63,13 @@ interface Mission {
   signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
   signOut: () => Promise<void>;
 
+  missionReady: boolean;
+  preview: {
+    site: Pt;
+    assessment: Assessment;
+    footprint: Footprint;
+    label: string;
+  } | null;
   mode: Mode;
   session: Session | null;
   editingPlanId: string | null;
@@ -136,7 +143,7 @@ export const useMission = create<Mission>((set, get) => ({
   user: null,
   organization: null,
   authChecked: false,
-  afterLogin: "operations",
+  afterLogin: "setup",
   applySession: (session) =>
     set({
       session,
@@ -147,6 +154,8 @@ export const useMission = create<Mission>((set, get) => ({
       notices: [],
       editingPlanId: null,
       editingRevision: null,
+      missionReady: false,
+      preview: null,
       coordinationError: null,
     }),
   signIn: async (email, password) => {
@@ -176,6 +185,8 @@ export const useMission = create<Mission>((set, get) => ({
       get().setMode("gateway");
     }
   },
+  missionReady: false,
+  preview: null,
   mode: "gateway",
   session: null,
   editingPlanId: null,
@@ -188,16 +199,16 @@ export const useMission = create<Mission>((set, get) => ({
   loadError: null,
   terrainError: null,
   lander: {
-    label: "Super-heavy lander",
-    thrust_kn: 1800,
-    hover_s: 30,
-    dispersion_m: 50,
+    label: "Light robotic lander",
+    thrust_kn: 4,
+    hover_s: 25,
+    dispersion_m: 150,
   },
-  presetId: "superheavy",
+  presetId: "clps",
   site: DEFAULT_SITE,
   revision: 0,
-  missionName: "KLL Cargo-7",
-  window: "2040-03-14 06:00–08:00 UTC",
+  missionName: "",
+  window: `${new Date(Date.now() + 3600000).toISOString()} / ${new Date(Date.now() + 7200000).toISOString()}`,
   actingId: "kestrel",
   plans: [],
   notices: [],
@@ -247,7 +258,12 @@ export const useMission = create<Mission>((set, get) => ({
       mode = "login";
     }
     const previous = get().mode;
-    set({ mode, placeMode: false });
+    if (
+      !get().missionReady &&
+      ["operations", "simulation", "replay", "optimizer"].includes(mode)
+    )
+      mode = "setup";
+    set({ mode, placeMode: false, preview: null });
     history.replaceState(null, "", `#${mode}`);
     if (mode === "gateway") set({ playing: false });
     if (mode === "operations" && previous === "gateway")
@@ -313,6 +329,7 @@ export const useMission = create<Mission>((set, get) => ({
         ...(changed
           ? {
               revision: s.revision + 1,
+              preview: null,
               assessment: null,
               footprint: null,
               optimization: null,
@@ -365,6 +382,7 @@ export const useMission = create<Mission>((set, get) => ({
       lander: { ...s.lander, ...patch },
       presetId,
       revision: s.revision + 1,
+      preview: null,
       assessment: null,
       footprint: null,
       optimization: null,
@@ -384,6 +402,7 @@ export const useMission = create<Mission>((set, get) => ({
     set((s) => ({
       site,
       revision: s.revision + 1,
+      preview: null,
       assessment: null,
       footprint: null,
       optimization: preserveOptimization ? s.optimization : null,
@@ -395,6 +414,7 @@ export const useMission = create<Mission>((set, get) => ({
       busy: null,
       placeMode: false,
     }));
+    if (get().mode === "setup") get().focus("lander");
   },
   focus: (cameraView) =>
     set((s) => ({ cameraView, cameraTick: s.cameraTick + 1 })),
@@ -404,7 +424,7 @@ export const useMission = create<Mission>((set, get) => ({
   },
   analyze: async () => {
     const { lander, site, revision, connected } = get();
-    if (!connected) return false;
+    if (!connected || !get().missionReady) return false;
     set({ busy: "analysis", error: null, assessment: null, footprint: null });
     try {
       const [assessment, footprint] = await Promise.all([
@@ -512,7 +532,7 @@ export const useMission = create<Mission>((set, get) => ({
       set({ editingPlanId: r.plan.id, editingRevision: r.plan.revision ?? 1 });
       if (get().revision === revision) set({ busy: null });
       get().notify(
-        `${r.plan.id} filed · ${r.notices_sent} consultation notice${r.notices_sent === 1 ? "" : "s"} created in the demo registry.`,
+        `Proposal filed · ${r.notices_sent} consultation${r.notices_sent === 1 ? "" : "s"} created.`,
       );
       await get().refresh();
       return r.plan.id;

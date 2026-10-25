@@ -1,48 +1,22 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import {
-  useMission,
-  DEFAULT_SITE,
-  REPLAY_DURATION,
-  type Mode,
-} from "./mission";
+import { useMission, type Mode } from "./mission";
 import Auth from "./components/Auth";
-import {
-  AccountMenu,
-  AssetSearch,
-  NotificationBell,
-} from "./components/Chrome";
+import { AccountMenu, NotificationBell } from "./components/Chrome";
 import Gateway from "./components/Gateway";
 import Configuration from "./components/Configuration";
-import {
-  OperationsPanel,
-  ExposurePanel,
-  OptimizerPanel,
-  SceneControls,
-} from "./components/MissionPanels";
-import Timeline from "./components/Timeline";
 import Report from "./components/Report";
-import { Icon, type IconName } from "./components/Icon";
+import { Icon } from "./components/Icon";
 import { Pricing, SubscriptionInfo } from "./components/Commercial";
 import { RegistryPanel, RegistryDetail } from "./components/SharedRegistry";
-import Coordination, { CommandOverview } from "./components/Coordination";
-import { api } from "./api";
 import {
-  PresetDock,
-  QuickActions,
-  SpatialToolbar,
-  ViewpointStrip,
-} from "./components/SpatialWorkspace";
+  JourneyRail,
+  JourneyCanvas,
+  AnalysisWorkspace,
+  CoordinationWorkspace,
+} from "./components/JourneyWorkspace";
+import { SceneControls } from "./components/MissionPanels";
 const LunarScene = lazy(() => import("./scene/LunarScene"));
 const Method = lazy(() => import("./Method"));
-
-const navigation: [Mode, string, IconName][] = [
-  ["operations", "Operations", "Globe2"],
-  ["setup", "Mission setup", "Box"],
-  ["simulation", "Simulation", "Zap"],
-  ["replay", "4D replay", "Play"],
-  ["optimizer", "Optimizer", "Sparkles"],
-  ["report", "Report", "FileText"],
-];
 
 function Clock() {
   const [now, setNow] = useState(new Date());
@@ -68,32 +42,7 @@ function Header() {
     session = useMission((s) => s.session);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const publicMode = ["gateway", "pricing", "login"].includes(mode);
-  const startDemo = async () => {
-    const s = useMission.getState(),
-      p = s.meta?.landers.find((p) => p.id === "superheavy");
-    if (p)
-      s.updateLander(
-        {
-          label: p.label,
-          thrust_kn: p.thrust_kn,
-          hover_s: p.hover_s,
-          dispersion_m: p.dispersion_m,
-        },
-        p.id,
-      );
-    s.moveSite(DEFAULT_SITE);
-    await s.switchOperator("kestrel");
-    if (!useMission.getState().user?.demo) return;
-    useMission.setState({
-      missionName: "KLL Cargo-7",
-      demo: true,
-      demoStep: 0,
-      demoPlanId: null,
-      demoRecipient: null,
-    });
-    s.setMode("operations");
-    s.focus("overview");
-  };
+  const startDemo = () => useMission.getState().setMode("setup");
   return (
     <header className="flight-header">
       <button
@@ -131,34 +80,12 @@ function Header() {
           </button>
         </nav>
       )}
-      {!publicMode && (
-        <nav className="operational-nav" aria-label="Operational navigation">
-          {(
-            [
-              ["operations", "Map"],
-              ["simulation", "Simulation"],
-              ["optimizer", "Optimizer"],
-              ["report", "Reports"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              className={mode === id ? "active" : ""}
-              aria-label={`Open ${label.toLowerCase()}`}
-              onClick={() => useMission.getState().setMode(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      )}
       <div className="header-right">
         <div className="connection-label">
           <span className={`status-dot ${connected ? "" : "offline"}`} />
           {connected ? "BACKEND CONNECTED" : "CONNECTING"}
         </div>
         <Clock />
-        {!publicMode && <AssetSearch />}
         {!publicMode && (
           <>
             {user?.demo && session?.demo_enabled && (
@@ -208,242 +135,12 @@ function Header() {
   );
 }
 
-function Rail() {
-  const mode = useMission((s) => s.mode);
-  const name = useMission((s) => s.missionName),
-    site = useMission((s) => s.site),
-    assets = useMission((s) => s.assets),
-    acting = useMission((s) => s.actingId),
-    plans = useMission((s) => s.plans);
-  return (
-    <nav className="mission-rail" aria-label="Mission modes">
-      <div className="rail-top">
-        <button
-          className="rail-region-card"
-          aria-label="Explore south pole region"
-          onClick={() => {
-            useMission.setState({ viewpoint: "colony", tour: false });
-            useMission.getState().setMode("operations");
-            useMission.getState().focus("overview");
-          }}
-        >
-          <div style={{ backgroundImage: "url('/lunar-hero.png')" }} />
-          <strong>South Pole Region</strong>
-          <small>Shared lunar neighborhood</small>
-          <span>
-            <span className="status-dot" />
-            SYNTHETIC EXPLORATION ZONE
-          </span>
-        </button>
-        <span className="rail-index">MISSION</span>
-        {navigation.map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={mode === id ? "active" : ""}
-            onClick={() => useMission.getState().setMode(id)}
-            aria-label={label}
-            aria-current={mode === id ? "page" : undefined}
-            title={label}
-          >
-            <Icon name={icon} size={21} />
-            <span>{label}</span>
-            {mode === id && <i />}
-          </button>
-        ))}
-      </div>
-      <div className="rail-mission-card">
-        <span>CURRENT MISSION</span>
-        <strong>{name}</strong>
-        <small>
-          E {(site.x / 1000).toFixed(2)} / N {(site.y / 1000).toFixed(2)} km
-        </small>
-        <div>
-          <span>{assets.length} shared assets</span>
-          <span>
-            {plans.filter((p) => p.operator_id === acting).length} filed plans
-          </span>
-        </div>
-        <button onClick={() => useMission.getState().setMode("setup")}>
-          Configure mission <Icon name="ArrowRight" size={14} />
-        </button>
-      </div>
-      <div className="rail-bottom">
-        {(
-          [
-            ["notices", "Coordinate", "Radio"],
-            ["registry", "Registry", "Layers"],
-            ["pricing", "Plans", "Flag"],
-            ["method", "Method", "CircleHelp"],
-          ] as const
-        ).map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={mode === id ? "active" : ""}
-            onClick={() => useMission.getState().setMode(id)}
-            aria-label={label}
-            title={label}
-          >
-            <Icon name={icon} size={20} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
-  );
-}
-
-function GuidedDemo() {
-  const step = useMission((s) => s.demoStep),
-    busy = useMission((s) => s.busy),
-    opt = useMission((s) => s.optimization),
-    assessment = useMission((s) => s.assessment);
-  const recipientReady = useMission((s) =>
-    s.notices.some(
-      (n) => n.plan_id === s.demoPlanId && n.to_operator_id === s.actingId,
-    ),
-  );
-  const steps = [
-    "Kestrel: inspect shared infrastructure.",
-    "Inspect modeled exposure, then prepare consultation.",
-    "File the original proposal and create actual notices.",
-    "Switch to the affected operator.",
-    "Record an objection as the recipient.",
-    "Return to Kestrel to prepare mitigation.",
-    "Search actual lower-cost landing candidates.",
-    "Adopt the best feasible candidate.",
-    "File a new revision of the original plan.",
-    "Review the revised consultation. Original objections remain in history.",
-  ];
-  const labels = [
-    "SIMULATE",
-    "PREPARE REPORT",
-    "FILE ORIGINAL",
-    "SWITCH OPERATOR",
-    "RECORD OBJECTION",
-    "RETURN TO KESTREL",
-    "RUN OPTIMIZER",
-    "ADOPT BEST",
-    "FILE REVISED",
-    "FINISH",
-  ];
-  async function next() {
-    const s = useMission.getState();
-    if (step === 0) {
-      await s.simulate();
-      if (!useMission.getState().assessment) return;
-      useMission.setState({ demoStep: 1 });
-    } else if (step === 1) {
-      useMission.setState({
-        playing: false,
-        replay: REPLAY_DURATION,
-        demoStep: 2,
-      });
-      s.setMode("report");
-    } else if (step === 2) {
-      const planId = await s.filePlan();
-      if (!planId) return;
-      const state = useMission.getState(),
-        notice = state.notices
-          .filter((n) => n.plan_id === planId)
-          .sort((a, b) => b.expected_loss_meur - a.expected_loss_meur)[0];
-      if (!notice) {
-        s.notify(
-          "No affected recipient was returned. Inspect the original scenario before continuing.",
-        );
-        return;
-      }
-      useMission.setState({
-        demoStep: 3,
-        demoPlanId: planId,
-        demoRecipient: notice.to_operator_id,
-      });
-      s.setMode("notices");
-    } else if (step === 3) {
-      if (!s.demoRecipient) return;
-      await s.switchOperator(s.demoRecipient);
-      s.setMode("notices");
-      useMission.setState({ demoStep: 4 });
-    } else if (step === 4) {
-      const n = s.notices.find(
-        (n) => n.plan_id === s.demoPlanId && n.to_operator_id === s.actingId,
-      );
-      if (!n) return;
-      try {
-        await api.updateNotice(
-          n.id,
-          "objection",
-          "Please evaluate a lower-exposure landing site before proceeding.",
-        );
-        await s.refresh();
-        useMission.setState({ demoStep: 5 });
-      } catch (e) {
-        useMission.setState({ error: String(e) });
-      }
-    } else if (step === 5) {
-      await s.switchOperator("kestrel");
-      s.setMode("optimizer");
-      useMission.setState({ demoStep: 6 });
-    } else if (step === 6) {
-      await s.optimize();
-      if (useMission.getState().optimization?.best)
-        useMission.setState({ demoStep: 7 });
-    } else if (step === 7) {
-      if (!opt?.best) return;
-      s.moveSite({ x: opt.best.site.x, y: opt.best.site.y }, true);
-      s.focus("site");
-      s.setMode("report");
-      useMission.setState({ demoStep: 8 });
-    } else if (step === 8) {
-      useMission.setState({
-        missionName: `${s.missionName.replace(/ · revised$/, "")} · revised`,
-      });
-      useMission.setState({
-        editingPlanId: s.demoPlanId,
-        editingRevision:
-          s.plans.find((p) => p.id === s.demoPlanId)?.revision ?? 1,
-      });
-      const planId = await useMission.getState().filePlan();
-      if (planId) {
-        s.setMode("notices");
-        useMission.setState({ demoStep: 9 });
-      }
-    } else useMission.setState({ demo: false });
-  }
-  return (
-    <div className="guided-demo">
-      <span className="demo-step">
-        DEMO / {String(step + 1).padStart(2, "0")}
-      </span>
-      <p>{steps[step]}</p>
-      <button
-        disabled={
-          !!busy ||
-          !assessment ||
-          (step === 7 && !opt?.best) ||
-          (step === 4 && !recipientReady)
-        }
-        onClick={() => void next()}
-      >
-        {labels[step]}
-        <Icon name="ArrowRight" size={15} />
-      </button>
-      <button
-        className="icon-button"
-        aria-label="Close guided demo"
-        onClick={() => useMission.setState({ demo: false })}
-      >
-        <Icon name="X" size={15} />
-      </button>
-    </div>
-  );
-}
-
 export default function App() {
   const mode = useMission((s) => s.mode),
     meta = useMission((s) => s.meta),
     connected = useMission((s) => s.connected),
     revision = useMission((s) => s.revision),
-    demo = useMission((s) => s.demo),
+    missionReady = useMission((s) => s.missionReady),
     error = useMission((s) => s.error),
     loadError = useMission((s) => s.loadError),
     toast = useMission((s) => s.toast),
@@ -475,10 +172,10 @@ export default function App() {
     return () => window.removeEventListener("hashchange", navigate);
   }, []);
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || !missionReady) return;
     const timer = setTimeout(() => void useMission.getState().analyze(), 300);
     return () => clearTimeout(timer);
-  }, [connected, revision]);
+  }, [connected, revision, missionReady]);
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -534,43 +231,27 @@ export default function App() {
           <Pricing />
         ) : (
           <>
-            <Rail />
+            <JourneyRail />
             {spatial && (
               <>
-                <SceneControls />
-                {[
-                  "operations",
-                  "simulation",
-                  "replay",
-                  "optimizer",
-                  "registry",
-                ].includes(mode) && <SpatialToolbar />}
                 {mode === "registry" ? (
                   <>
+                    <SceneControls />
                     <RegistryPanel />
                     <RegistryDetail />
                   </>
-                ) : mode === "notices" ? (
-                  <Coordination />
                 ) : (
                   <>
-                    {mode === "setup" ? <Configuration /> : <OperationsPanel />}
-                    {mode === "optimizer" ? (
-                      <OptimizerPanel />
+                    <JourneyCanvas />
+                    {mode === "setup" ? (
+                      <Configuration />
+                    ) : mode === "notices" ? (
+                      <CoordinationWorkspace />
                     ) : (
-                      mode !== "setup" && <ExposurePanel />
+                      <AnalysisWorkspace />
                     )}
                   </>
                 )}
-                {mode === "operations" && <CommandOverview />}
-                {["operations", "optimizer", "registry"].includes(mode) && (
-                  <>
-                    <QuickActions />
-                    <ViewpointStrip />
-                  </>
-                )}
-                {mode === "setup" && <PresetDock />}
-                {(mode === "simulation" || mode === "replay") && <Timeline />}
               </>
             )}
             {mode === "report" && <Report />}
@@ -616,7 +297,6 @@ export default function App() {
             {terrainError}
           </div>
         )}
-        {demo && mode !== "gateway" && <GuidedDemo />}
       </main>
       <footer className="flight-footer">
         <span>

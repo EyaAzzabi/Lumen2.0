@@ -131,24 +131,47 @@ export function MissionFields() {
 }
 
 export default function Configuration() {
+  const name = useMission((s) => s.missionName),
+    busy = useMission((s) => s.busy);
   return (
-    <aside className="floating-panel configuration">
-      <div className="panel-header">
-        <span>01 / MISSION CONFIGURATION</span>
-        <Icon name="SlidersHorizontal" size={16} />
+    <aside
+      className="journey-panel prepare-panel"
+      aria-label="Mission preparation"
+    >
+      <div className="journey-panel-head">
+        <span>01 / PREPARE</span>
+        <h2>Your landing starts here.</h2>
+        <p>
+          Name your mission, choose a lander, then place its touchdown point.
+        </p>
       </div>
-      <div className="panel-content">
-        <h2>Prepare your descent.</h2>
-        <p className="panel-intro">Every parameter shapes the footprint.</p>
+      <div className="journey-panel-body">
         <MissionFields />
         <button
-          className="action-primary full"
+          className="outline-button full"
           onClick={() => {
+            useMission.setState({ placeMode: true });
+            useMission.getState().focus("top");
+          }}
+        >
+          Choose a point on the map
+        </button>
+        <p className="panel-note">
+          Drag to inspect the scene. Coordinates and parameters are editable; no
+          example result is preloaded.
+        </p>
+      </div>
+      <div className="journey-panel-foot">
+        <button
+          className="action-primary full"
+          disabled={!name.trim() || !!busy}
+          onClick={() => {
+            useMission.setState({ missionReady: true });
             useMission.getState().setMode("operations");
             useMission.getState().focus("overview");
           }}
         >
-          CONTINUE TO OPERATIONS <Icon name="ArrowRight" size={16} />
+          Analyze this mission <Icon name="ArrowRight" size={17} />
         </button>
       </div>
     </aside>

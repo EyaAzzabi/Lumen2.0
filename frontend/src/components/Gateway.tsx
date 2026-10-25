@@ -7,9 +7,9 @@ export default function Gateway() {
     assets = useMission((s) => s.assets),
     operators = useMission((s) => s.operators),
     reduced = useMission((s) => s.reducedMotion);
-  const enter = () => useMission.getState().setMode("operations");
+  const enter = () => useMission.getState().setMode("setup");
   const startDemo = () => {
-    useMission.setState({ demo: true, demoStep: 0 });
+    useMission.setState({ demo: false });
     enter();
   };
   const features: [IconName, string, string, () => void][] = [
@@ -116,7 +116,7 @@ export default function Gateway() {
             <span>
               <Icon name="Play" size={15} />
             </span>
-            Watch the mission
+            Start planning
           </button>
         </div>
         {loadError && (
