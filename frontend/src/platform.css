@@ -21,19 +21,19 @@
 }
 .operator-switch > span {
   display: block;
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.1em;
   color: var(--faint);
 }
 .operator-switch select {
   max-width: 240px;
   font:
-    10px Inter,
+    11.5px Inter,
     sans-serif;
   padding-top: 3px;
 }
 .subscription-badge {
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   letter-spacing: 0.06em;
   padding: 7px 12px;
   border: 1px solid #e9bd8333;
@@ -43,14 +43,14 @@
   text-align: left;
 }
 .subscription-badge small {
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   color: var(--faint);
   display: block;
   margin-top: 4px;
 }
 .demo-config-label {
   display: inline-block;
-  font: 7px/1.8 var(--mono);
+  font: 10px/1.8 var(--mono);
   letter-spacing: 0.07em;
   color: var(--gold);
   border: 1px solid #e9bd832b;
@@ -91,7 +91,7 @@
   margin: 20px 0;
 }
 .platform-dialog .panel-note {
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .platform-dialog .outline-button,
 .platform-dialog .action-primary {
@@ -104,7 +104,7 @@
 }
 .subscription-tier > span {
   display: block;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: var(--muted);
   margin-top: 8px;
 }
@@ -142,7 +142,7 @@
 }
 .command-overview span {
   display: block;
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   color: var(--muted);
   margin-top: 4px;
   letter-spacing: 0.05em;
@@ -172,7 +172,7 @@
   gap: 12px;
 }
 .registry-filter-pair select {
-  font-size: 10px;
+  font-size: 11.5px;
   padding: 9px 7px;
 }
 .registry-scope {
@@ -183,7 +183,7 @@
 }
 .registry-scope button {
   flex: 1;
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   padding: 10px;
   border: 0;
   color: var(--muted);
@@ -223,19 +223,19 @@
 }
 .registry-assets strong {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 .registry-assets small {
   display: block;
   margin-top: 7px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--muted);
 }
 .registry-assets .mono {
   display: block;
   color: var(--faint);
-  font-size: 7px;
+  font-size: 10px;
   margin-top: 7px;
 }
 .registry-assets .status-dot {
@@ -249,7 +249,7 @@
   color: var(--faint);
 }
 .registry-panel .action-text {
-  font-size: 7px;
+  font-size: 10px;
   min-height: 30px;
 }
 .asset-register-form {
@@ -268,7 +268,7 @@
   width: 300px;
 }
 .registry-detail .owner-line {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 14px;
 }
@@ -306,7 +306,7 @@
 }
 .registry-principle p > span {
   font:
-    10px/1.8 Inter,
+    11.5px/1.8 Inter,
     sans-serif;
   color: var(--faint);
 }
@@ -325,7 +325,7 @@
 }
 .nearby-plan small {
   display: block;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   margin-top: 6px;
   color: var(--faint);
 }
@@ -359,7 +359,7 @@
 }
 .coordination-tabs button {
   flex: 1;
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   padding: 11px 0;
   border: 0;
   border-bottom: 1px solid transparent;
@@ -371,7 +371,7 @@
   border-color: var(--ice);
 }
 .coordination-tabs button > span {
-  font-size: 7px;
+  font-size: 10px;
   margin-left: 5px;
   color: var(--faint);
 }
@@ -387,7 +387,7 @@
   border-radius: 3px;
   text-align: left;
   color: var(--muted);
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
 }
 .coordination-notices > button.active {
   border-color: #65d9ff66;
@@ -403,7 +403,7 @@
 }
 .notice-state {
   text-transform: uppercase;
-  font-size: 6px;
+  font-size: 10px;
   padding: 3px 5px;
   background: #e9bd8309;
   color: var(--gold);
@@ -453,18 +453,18 @@
   flex: none;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: var(--faint);
 }
 .coordination-timeline p {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--muted);
   margin: 3px 0 0;
   flex: 1;
 }
 .coordination-timeline small {
   display: block;
-  font-size: 8px;
+  font-size: 10.5px;
   color: var(--faint);
   line-height: 1.7;
   margin-top: 5px;
@@ -492,16 +492,16 @@
 }
 .notice-plan-summary .outline-button {
   margin-top: 18px;
-  font-size: 7px;
+  font-size: 10px;
 }
 .notice-plan-summary dd {
   max-width: 135px;
-  font-size: 7px;
+  font-size: 10px;
   overflow-wrap: anywhere;
 }
 .notice-evidence {
   white-space: pre-wrap;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.8;
   color: var(--muted);
   margin-top: 16px;
@@ -530,7 +530,7 @@
   padding: 11px;
   resize: vertical;
   font:
-    10px/1.7 Inter,
+    11.5px/1.7 Inter,
     sans-serif;
   margin-top: 8px;
   color: var(--text);
@@ -540,7 +540,7 @@
   gap: 7px;
 }
 .response-actions button {
-  font-size: 7px;
+  font-size: 10px;
   gap: 7px;
   flex: 1;
   padding: 9px;
@@ -560,11 +560,11 @@
 .filed-plans > button > span {
   display: flex;
   justify-content: space-between;
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   color: var(--gold);
 }
 .filed-plans > button > span small {
-  font-size: 7px;
+  font-size: 10px;
   color: var(--faint);
 }
 .filed-plans strong {
@@ -573,12 +573,12 @@
   margin: 11px 0;
 }
 .filed-plans p {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: var(--muted);
   margin: 0 0 13px;
 }
 .filed-plans > button > small {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -600,7 +600,7 @@
 }
 .pricing-heading .eyeline {
   justify-content: center;
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .pricing-heading h1 {
   font: 400 49px/1.12 var(--brand);
@@ -624,7 +624,7 @@
   background: #e9bd8306;
   border: 1px solid #e9bd8325;
   border-radius: 2px;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: var(--gold);
   letter-spacing: 0.04em;
   margin-top: 8px;
@@ -662,7 +662,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.09em;
   border-radius: 3px 3px 0 0;
 }
@@ -674,7 +674,7 @@
   color: var(--ice);
 }
 .pricing-eyebrow {
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.08em;
   color: var(--faint);
 }
@@ -689,7 +689,7 @@
   white-space: nowrap;
 }
 .pricing-period {
-  font: 8px/1.6 var(--mono);
+  font: 10.5px/1.6 var(--mono);
   color: var(--muted);
   margin: 9px 0 0;
 }
@@ -710,7 +710,7 @@
   display: flex;
   align-items: start;
   gap: 9px;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: #b9c6d5;
 }
@@ -742,7 +742,7 @@
   margin: 0;
 }
 .pricing-bottom > span {
-  font: 7px/1.9 var(--mono);
+  font: 10px/1.9 var(--mono);
   color: var(--faint);
   text-align: right;
 }
@@ -783,7 +783,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: #bbc9d7;
 }
 .login-principles svg {
@@ -817,18 +817,18 @@
   padding-top: 18px;
 }
 .sso-concept > .row {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: var(--faint);
   margin-bottom: 15px;
 }
 .sso-concept .demo-config-label {
-  font-size: 6px;
+  font-size: 10px;
 }
 .sso-concept .form-label {
   margin-bottom: 12px;
 }
 .sso-info {
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.8;
   color: var(--gold);
   margin: 14px 0 0;
@@ -837,7 +837,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.05em;
   color: var(--faint);
   margin: 24px 0;
@@ -848,7 +848,7 @@
   background: var(--line);
 }
 .login-disclosure {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.8;
   color: var(--faint);
   margin: 17px 0 0;
@@ -936,7 +936,7 @@
     padding: 10px 12px;
   }
   .command-overview span {
-    font-size: 5px;
+    font-size: 10px;
   }
   .command-overview strong {
     font-size: 18px;
@@ -982,7 +982,7 @@
     font-size: 21px;
   }
   .pricing-card li {
-    font-size: 9px;
+    font-size: 11px;
   }
   .login-workspace {
     padding: 5% 6%;
@@ -1004,17 +1004,17 @@
     display: block;
   }
   .operator-switch > span {
-    font-size: 5px;
+    font-size: 10px;
   }
   .operator-switch select {
     max-width: 160px;
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .subscription-badge {
-    font-size: 6px;
+    font-size: 10px;
   }
   .subscription-badge small {
-    font-size: 5px;
+    font-size: 10px;
   }
   .header-right .demo-button {
     display: none;
@@ -1024,7 +1024,7 @@
     gap: 15px;
   }
   .public-nav button {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .header-right {
     margin-left: 0;
@@ -1109,7 +1109,7 @@
     font-size: 37px;
   }
   .login-story .eyeline {
-    font-size: 7px;
+    font-size: 10px;
   }
   .login-story > p {
     font-size: 11px;
@@ -1122,7 +1122,7 @@
     font-size: 23px;
   }
   .login-principles span {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .login-principles {
     margin-top: 30px;
@@ -1142,12 +1142,12 @@
   }
   .operator-switch select {
     max-width: 139px;
-    font-size: 8px;
+    font-size: 10.5px;
     padding-right: 0;
   }
   .subscription-badge {
     padding: 5px 6px;
-    font-size: 5px;
+    font-size: 10px;
   }
   .subscription-badge small {
     font-size: 4px;
@@ -1160,7 +1160,7 @@
     gap: 12px;
   }
   .public-nav button {
-    font-size: 9px;
+    font-size: 11px;
   }
   .public-nav button:first-child {
     display: none;
@@ -1215,7 +1215,7 @@
     display: none;
   }
   .registry-empty > p {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .registry-empty > svg {
     display: none;
@@ -1246,10 +1246,10 @@
     font-size: 11px;
   }
   .pricing-heading .eyeline {
-    font-size: 6px;
+    font-size: 10px;
   }
   .indicative-banner {
-    font-size: 5px;
+    font-size: 10px;
     line-height: 1.8;
     padding: 8px;
     align-items: start;
@@ -1268,10 +1268,10 @@
     font-size: 37px;
   }
   .pricing-bottom p {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .pricing-bottom > span {
-    font-size: 6px;
+    font-size: 10px;
   }
   .login-workspace {
     display: block;

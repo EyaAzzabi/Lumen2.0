@@ -1,0 +1,331 @@
+/* Guided-journey UX layer: progress, onboarding, trust, notifications,
+   undo, shortcuts and readable labels. Loaded last. */
+
+/* ---------- journey progress ---------- */
+.journey-steps > button.done .step-number {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.journey-steps > button.done:not(.active) b { color: #cfe9de; }
+
+/* ---------- onboarding checklist ---------- */
+.onboarding {
+  margin: 14px 0 0;
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+  background: color-mix(in srgb, var(--gold) 6%, #08111c);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+.onboarding-head { display: flex; align-items: center; gap: 8px; }
+.onboarding-head b { font-size: 13px; }
+.onboarding-head small { margin-left: auto; color: var(--gold); font: 600 11px var(--mono); }
+.onboarding > button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 2px;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+.onboarding > button:hover:not(:disabled) { background: #ffffff0a; }
+.onboarding > button span {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  font: 600 10px var(--mono);
+}
+.onboarding > button.ok { color: var(--muted); text-decoration: line-through; opacity: 1; }
+.onboarding > button.ok span { background: var(--ok); border-color: var(--ok); color: #04121f; }
+
+/* ---------- lead with the result ---------- */
+.verdict-sentence { font-size: 14px; line-height: 1.45; color: var(--text); }
+.comparison-headline {
+  margin: 4px 0 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* ---------- trust ---------- */
+.source-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 8px 0 0;
+  color: var(--faint);
+  font: 11px var(--mono);
+}
+.limits-badge {
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  color: var(--gold);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: 600 10.5px Inter, sans-serif;
+  cursor: pointer;
+}
+.limits-badge:hover { background: color-mix(in srgb, var(--gold) 16%, transparent); }
+
+/* ---------- glossary tooltips ---------- */
+.term {
+  position: relative;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+  outline: none;
+}
+.term::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 90;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: #0b1522f7;
+  color: var(--text);
+  font: 400 12px/1.45 Inter, sans-serif;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
+  box-shadow: 0 14px 40px #0009;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.term:hover::after,
+.term:focus-visible::after { opacity: 1; transform: none; }
+
+/* ---------- 3D labels: dots for low-risk assets ---------- */
+.spatial-dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #050a12;
+  box-shadow: 0 0 0 1px #ffffff55;
+  padding: 0;
+  cursor: pointer;
+}
+.spatial-dot::after {
+  content: attr(data-name);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #08111de8;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: 500 11px Inter, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.spatial-dot:hover::after,
+.spatial-dot:focus-visible::after { opacity: 1; }
+.spatial-label { font-size: 12px !important; }
+.spatial-label small { font-size: 10px !important; }
+.candidate-label.compact {
+  min-width: 0;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+/* ---------- notification centre ---------- */
+.bell-wrap { position: relative; }
+.bell-menu {
+  position: absolute;
+  right: 0;
+  top: 50px;
+  width: 360px;
+  z-index: 80;
+  background: #0b1522fa;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px #000a;
+  padding: 8px;
+}
+.bell-menu-head { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 8px 10px; }
+.bell-menu-head b { font-size: 14px; }
+.bell-menu-head small { color: var(--muted); font-size: 11.5px; }
+.bell-item {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: #c8d3df;
+  border-radius: 8px;
+  padding: 9px 8px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.bell-item:hover { background: #65d9ff10; }
+.bell-item.unread { color: var(--text); font-weight: 600; background: #65d9ff0a; }
+.bell-item small { display: block; color: var(--faint); font: 400 11px var(--mono); margin-top: 3px; }
+.bell-risk { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; }
+.bell-empty { color: var(--muted); font-size: 12.5px; line-height: 1.5; padding: 4px 8px 10px; margin: 0; }
+.bell-all {
+  width: 100%;
+  margin-top: 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--ice);
+  padding: 10px 8px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ---------- team in the account menu ---------- */
+.account-section { border-top: 1px solid var(--line); padding-top: 10px; margin-bottom: 10px; }
+.account-section > span { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: 6px; }
+.member-row { display: flex; gap: 9px; align-items: center; padding: 5px 0; font-size: 12.5px; }
+.member-row > span:nth-child(2) { min-width: 0; flex: 1; }
+.member-row small { display: block; color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-row em { font-style: normal; color: var(--muted); font-size: 11px; }
+.avatar.small { width: 28px; height: 28px; font-size: 11px; flex: none; }
+.account-links { display: grid; gap: 2px; border-top: 1px solid var(--line); padding: 8px 0; margin-bottom: 8px; }
+.account-links button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  background: none;
+  color: #c8d3df;
+  font-size: 12.5px;
+  padding: 7px 4px;
+  border-radius: 6px;
+  text-align: left;
+}
+.account-links button:hover { background: #ffffff0a; color: var(--text); }
+
+/* ---------- teaching empty states ---------- */
+.teaching-empty {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  color: var(--ice);
+}
+.teaching-empty b { display: block; color: var(--text); font-size: 13px; margin-bottom: 4px; }
+.teaching-empty p { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0 0 10px; }
+.outline-button.armed { border-color: var(--ice); color: var(--ice); background: #65d9ff12; }
+
+/* ---------- undo + shortcuts ---------- */
+.toast-undo {
+  border: 1px solid #65d9ff88;
+  background: #65d9ff1a;
+  color: var(--ice);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.toast-undo:hover { background: #65d9ff33; }
+.footer-shortcuts {
+  margin-left: 14px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.footer-shortcuts:hover { color: var(--ice); }
+.shortcuts {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: #02050acc;
+  backdrop-filter: blur(3px);
+}
+.shortcuts > div {
+  width: min(420px, 92vw);
+  background: #0b1522;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+.shortcuts b { font-size: 16px; }
+.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 16px 0 0; font-size: 13px; }
+.shortcuts dt { white-space: nowrap; }
+.shortcuts dd { margin: 0; color: #c8d3df; }
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  background: #101c2b;
+  font: 600 11.5px var(--mono);
+  text-align: center;
+  color: var(--text);
+}
+
+/* The step check mark is the only icon shown inside the step list. */
+.journey-steps .step-number svg { display: inline-block; vertical-align: -2px; }
+.journey-steps > button.done .step-number {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid;
+}
+
+/* Map picking hint. */
+.pick-hint {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid #65d9ff88;
+  background: #08111df2;
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 10px 30px #0008;
+}
+.pick-hint svg { color: var(--ice); }
+.pick-hint button { border: 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; }
+
+/* Small screens: toasts sit above the contextual panel footer, not on it. */
+@media (max-width: 1250px) {
+  .mission-toast { left: calc(50% - 120px); max-width: min(520px, 60vw); bottom: 92px; }
+}

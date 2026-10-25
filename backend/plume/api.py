@@ -188,37 +188,12 @@ class SiteRequest(Input):
     site: Point
 
 
-class AssetLimit(Input):
-    asset_id: str = Field(min_length=1, max_length=100)
-    max_damage_fraction: float = Field(ge=0, le=1)
-
-
 class OptimizeRequest(SiteRequest):
-    asset_limits: list[AssetLimit] = Field(default_factory=list, max_length=20)
     search_radius_m: float = Field(3_000, ge=500, le=8_000)
     traverse_meur_per_km: float = Field(2.0, ge=0, le=50)
     max_slope_deg: float = Field(8.0, ge=2, le=20)
     clearance_m: float = Field(300, ge=50, le=2_000)
     dispersion_margin_sigma: float = Field(0, ge=0, le=3)
-
-
-class DraftData(SiteRequest):
-    resolution_notice_id: str | None = Field(None, max_length=100)
-    name: str = Field("", max_length=80)
-    window: str = Field("", max_length=200)
-    mission_ready: bool = False
-    editing_plan_id: str | None = Field(None, max_length=100)
-    editing_revision: int | None = Field(None, ge=1)
-    search_radius_m: float = Field(4000, ge=500, le=8000)
-    traverse_meur_per_km: float = Field(2, ge=0, le=50)
-    max_slope_deg: float = Field(8, ge=2, le=20)
-    clearance_m: float = Field(300, ge=50, le=2000)
-    asset_limits: list[AssetLimit] = Field(default_factory=list, max_length=20)
-
-
-class DraftSave(Input):
-    expected_version: int = Field(ge=0)
-    draft: DraftData
 
 
 class BriefRequest(SiteRequest):
@@ -237,8 +212,6 @@ class AssetIn(Input):
 
 
 class PlanIn(SiteRequest):
-    asset_limits: list[AssetLimit] = Field(default_factory=list, max_length=20)
-    resolution_notice_id: str | None = Field(None, max_length=100)
     operator_id: str
     name: str = Field(min_length=1, max_length=80)
     window: str = Field("", max_length=200)
@@ -411,6 +384,13 @@ def me(request: Request, who: IdentityDep):
     return session(request)
 
 
+@app.get("/api/organization/members")
+def organization_members(who: IdentityDep):
+    """Members of the signed-in user's organization only."""
+    who.require("private:read")
+    return accounts.members(store, who.organization_id)
+
+
 @app.post("/api/auth/logout")
 def account_logout(request: Request, response: APIResponse, who: IdentityDep):
     return logout(request, response, who)
@@ -540,12 +520,6 @@ def footprint(body: SiteRequest):
 
 @app.post("/api/optimize", response_model=OptimizationOut)
 def optimize(body: OptimizeRequest):
-    assets = store.assets()
-    known = {a["id"] for a in assets}
-    if any(limit.asset_id not in known for limit in body.asset_limits):
-        raise HTTPException(422, "Protection constraint references an unknown asset")
-    if len({limit.asset_id for limit in body.asset_limits}) != len(body.asset_limits):
-        raise HTTPException(422, "Duplicate protection constraint")
     with computation():
         return planner.optimize(
             terrain,
@@ -559,9 +533,6 @@ def optimize(body: OptimizeRequest):
             body.max_slope_deg,
             body.clearance_m,
             dispersion_margin_sigma=body.dispersion_margin_sigma,
-            asset_limits={
-                limit.asset_id: limit.max_damage_fraction for limit in body.asset_limits
-            },
         )
 
 
@@ -644,54 +615,6 @@ def brief(body: BriefRequest, who: IdentityDep):
     }
 
 
-@app.get("/api/workspace/draft")
-def get_draft(who: IdentityDep):
-    who.require("private:read")
-    with store.connect() as c:
-        row = c.execute(
-            "SELECT * FROM workspace_drafts WHERE user_id=? AND organization_id=?",
-            (who.user_id, who.organization_id),
-        ).fetchone()
-    return (
-        {
-            "version": row["version"],
-            "draft": json.loads(row["payload"]),
-            "updated_at": row["updated_at"],
-        }
-        if row
-        else {"version": 0, "draft": None, "updated_at": None}
-    )
-
-
-@app.post("/api/workspace/draft")
-def save_draft(body: DraftSave, who: IdentityDep):
-    who.require("plans:write")
-    stamp = time.time()
-    with store.transaction() as c:
-        row = c.execute(
-            "SELECT version FROM workspace_drafts WHERE user_id=? AND organization_id=?",
-            (who.user_id, who.organization_id),
-        ).fetchone()
-        version = row[0] if row else 0
-        if version != body.expected_version:
-            raise HTTPException(
-                409,
-                "Draft changed in another tab. Reload the saved draft before saving again.",
-            )
-        version += 1
-        c.execute(
-            "INSERT INTO workspace_drafts VALUES(?,?,?,?,?) ON CONFLICT(user_id,organization_id) DO UPDATE SET version=excluded.version,payload=excluded.payload,updated_at=excluded.updated_at",
-            (
-                who.user_id,
-                who.organization_id,
-                version,
-                body.draft.model_dump_json(),
-                stamp,
-            ),
-        )
-    return {"version": version, "updated_at": stamp}
-
-
 @app.get("/api/plans", response_model=list[PlanOut])
 def plans(who: IdentityDep):
     who.require("private:read")
@@ -711,36 +634,6 @@ def file_plan(body, who, key, plan_id=None):
         old = private_plan(plan_id, who)
         who.require("plans:write", old["operator_id"])
     a = store.assets()
-    known = {asset["id"] for asset in a}
-    limits = {limit.asset_id: limit.max_damage_fraction for limit in body.asset_limits}
-    if set(limits) - known or len(limits) != len(body.asset_limits):
-        raise HTTPException(422, "Unknown or duplicate protected asset")
-    if body.resolution_notice_id:
-        source = next(
-            (
-                n
-                for n in store.notices(who.organization_id)
-                if n["id"] == body.resolution_notice_id
-            ),
-            None,
-        )
-        if (
-            not source
-            or source["plan_id"] != plan_id
-            or source["status"] != "objection"
-        ):
-            raise HTTPException(
-                422, "Resolution must reference a visible objection on this plan"
-            )
-        if source.get("revision", 1) != body.expected_revision:
-            raise HTTPException(
-                409, "The source objection is from a different revision"
-            )
-        if not (set(source["asset_ids"]) & known) <= set(limits):
-            raise HTTPException(
-                422,
-                "Every registered asset in the source objection needs an explicit limit",
-            )
     with computation():
         result = planner.assess(
             terrain,
@@ -750,29 +643,7 @@ def file_plan(body, who, key, plan_id=None):
             body.site.y,
             a,
         )
-    violations = [
-        r["asset_id"]
-        for r in result["assets"]
-        if r["asset_id"] in limits and r["damage_fraction"] > limits[r["asset_id"]]
-    ]
-    if violations:
-        raise HTTPException(
-            422, "Requested modeled damage limit exceeded: " + ", ".join(violations)
-        )
-    protection = {
-        "limits": limits,
-        "resolution_notice_id": body.resolution_notice_id,
-        "metric": "mean modeled damage fraction over touchdown samples",
-        "passes": True,
-        "values": {
-            r["asset_id"]: r["damage_fraction"]
-            for r in result["assets"]
-            if r["asset_id"] in limits
-        },
-        "not_safety_certification": True,
-    }
     plan = {
-        "protection": protection,
         "operator_id": body.operator_id,
         "name": body.name,
         "window": body.window,

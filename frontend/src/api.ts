@@ -127,39 +127,7 @@ export interface Alternative {
   distance_from_target_m: number;
   slope_deg: number;
 }
-export interface AssetLimit {
-  asset_id: string;
-  max_damage_fraction: number;
-}
-export interface WorkspaceDraft {
-  resolution_notice_id: string | null;
-  name: string;
-  window: string;
-  mission_ready: boolean;
-  lander: LanderParams;
-  site: Pt;
-  editing_plan_id: string | null;
-  editing_revision: number | null;
-  search_radius_m: number;
-  traverse_meur_per_km: number;
-  max_slope_deg: number;
-  clearance_m: number;
-  asset_limits: AssetLimit[];
-}
-export interface DraftEnvelope {
-  version: number;
-  draft: WorkspaceDraft | null;
-  updated_at: number | null;
-}
 export interface Optimization {
-  protection_constraints?: {
-    limits: Record<string, number>;
-    metric: string;
-    rejected_evaluated_sites: number;
-    baseline_passes: boolean;
-    best_passes: boolean | null;
-    scope: string;
-  };
   target: Assessment;
   best: Assessment | null;
   best_traverse_meur: number | null;
@@ -187,7 +155,6 @@ export interface Brief {
   latency_ms: number;
 }
 export interface Plan {
-  protection?: {limits: Record<string,number>; resolution_notice_id: string | null; values: Record<string,number>; passes: boolean; metric: string};
   id: string;
   operator_id: string;
   name: string;
@@ -367,7 +334,17 @@ const filedBody = (p: { window: string; [key: string]: unknown }) => {
     : p;
 };
 
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "member";
+  joined_at: number;
+  demo: boolean;
+}
+
 export const api = {
+  members: () => req<Member[]>("/api/organization/members"),
   onUnauthorized: (callback: () => void) => {
     unauthorized = callback;
   },
@@ -431,12 +408,6 @@ export const api = {
     post<Assessment>(`/api/plans/${id}/reassess`, {}),
   withdrawPlan: (id: string) => post<Plan>(`/api/plans/${id}/withdraw`, {}),
   readNotice: (id: string) => post<Notice>(`/api/notices/${id}/read`, {}),
-  getDraft: () => req<DraftEnvelope>("/api/workspace/draft"),
-  saveDraft: (draft: WorkspaceDraft, expected_version: number) =>
-    post<{ version: number; updated_at: number }>("/api/workspace/draft", {
-      draft,
-      expected_version,
-    }),
   meta: () => req<Meta>("/api/meta"),
   terrainMesh: () => req<TerrainMesh>("/api/terrain/mesh"),
   operators: () => req<Operator[]>("/api/operators"),
@@ -448,11 +419,8 @@ export const api = {
     post<Assessment>("/api/assess", { lander, site }),
   footprint: (lander: LanderParams, site: Pt) =>
     post<Footprint>("/api/footprint", { lander, site }),
-  optimize: (
-    lander: LanderParams,
-    site: Pt,
-    opts: Record<string, number | AssetLimit[]>,
-  ) => post<Optimization>("/api/optimize", { lander, site, ...opts }),
+  optimize: (lander: LanderParams, site: Pt, opts: Record<string, number>) =>
+    post<Optimization>("/api/optimize", { lander, site, ...opts }),
   brief: (lander: LanderParams, site: Pt, optimized_site: Pt | null) =>
     post<Brief>("/api/copilot/brief", {
       lander,

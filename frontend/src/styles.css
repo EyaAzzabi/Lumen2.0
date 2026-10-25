@@ -43,7 +43,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand img { width: 38px; height: 38px; border-radius: 50%; box-shadow: 0 0 18px rgba(156, 199, 255, 0.25); }
 .brand-name { font-family: var(--brand); letter-spacing: 0.32em; font-size: 17px; }
-.brand-tag { font-size: 10px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.brand-tag { font-size: 11.5px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
 .tabs { display: flex; gap: 4px; }
 .tab {
   background: none; border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer;
@@ -83,7 +83,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   height: 8px; border-radius: 4px;
   background: linear-gradient(90deg, rgba(250,204,21,0.15), rgba(250,204,21,0.6) 25%, #fb923c 50%, #f43f5e 75%, #be185d);
 }
-.legend-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+.legend-ticks { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .map-hint {
   position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
   background: rgba(4, 6, 11, 0.8); border: 1px solid var(--line-strong); border-radius: 999px;
@@ -217,7 +217,7 @@ td.num { font-family: var(--mono); text-align: right; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
 
 .hero-logo { width: 100%; border-radius: var(--radius); border: 1px solid var(--line); }
-.chart text { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+.chart text { fill: var(--muted); font-size: 11.5px; font-family: var(--mono); }
 .chart .axis { stroke: var(--line-strong); }
 .chart .gridline { stroke: var(--line); }
 .callout { border-left: 3px solid var(--gold); padding: 10px 14px; background: rgba(242,194,123,0.06); border-radius: 0 10px 10px 0; font-size: 13px; }

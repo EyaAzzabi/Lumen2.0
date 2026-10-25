@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMission, type Mode } from "../mission";
 import { Icon, type IconName } from "./Icon";
+import { api, RISK_COLOR, type Member } from "../api";
 
 /* Template-style header widgets (asset search, notifications, account) and sidebar. */
 
@@ -73,25 +74,94 @@ export function AssetSearch() {
   );
 }
 
+function timeAgo(seconds: number) {
+  const d = Math.max(0, Date.now() / 1000 - seconds);
+  if (d < 60) return "just now";
+  if (d < 3600) return `${Math.floor(d / 60)} min ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
+  return new Date(seconds * 1000).toLocaleDateString();
+}
+
+/** Bell with a dropdown of the latest notices and responses. */
 export function NotificationBell() {
-  const unread = useMission(
-    (s) =>
-      s.notices.filter(
-        (n) =>
-          n.to_operator_id === s.actingId &&
-          n.status === "unread" &&
-          !n.read_at,
-      ).length,
-  );
+  const notices = useMission((s) => s.notices),
+    plans = useMission((s) => s.plans),
+    acting = useMission((s) => s.actingId),
+    operators = useMission((s) => s.operators);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+  const name = (id: string) => operators.find((o) => o.id === id)?.name ?? id;
+  const unread = notices.filter(
+    (n) => n.to_operator_id === acting && n.status === "unread" && !n.read_at,
+  ).length;
+  // Incoming notices, plus responses to notices this organization sent.
+  const items = notices
+    .map((n) => {
+      const incoming = n.to_operator_id === acting;
+      const when = incoming ? n.created_at : (n.responded_at ?? n.created_at);
+      const text = incoming
+        ? `${name(n.from_operator_id)} filed a landing that affects your assets`
+        : n.status === "unread"
+          ? `Consultation sent to ${name(n.to_operator_id)}`
+          : `${name(n.to_operator_id)} ${n.status === "objection" ? "raised a concern" : "acknowledged"}`;
+      return { n, incoming, when, text };
+    })
+    .sort((a, b) => b.when - a.when)
+    .slice(0, 8);
+  function openPlan(planId: string) {
+    useMission.setState({ focusPlanId: planId });
+    useMission.getState().setMode("notices");
+    setOpen(false);
+  }
   return (
-    <button
-      className="bell-button"
-      aria-label={`Coordination notices${unread ? `, ${unread} unread` : ""}`}
-      onClick={() => useMission.getState().setMode("notices")}
-    >
-      <Icon name="Bell" size={18} />
-      {unread > 0 && <span className="bell-badge">{unread}</span>}
-    </button>
+    <div className="bell-wrap" ref={ref}>
+      <button
+        className="bell-button"
+        aria-label={`Coordination notices${unread ? `, ${unread} unread` : ""}`}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="Bell" size={18} />
+        {unread > 0 && <span className="bell-badge">{unread}</span>}
+      </button>
+      {open && (
+        <div className="bell-menu" role="menu">
+          <div className="bell-menu-head">
+            <b>Notifications</b>
+            <small>{unread ? `${unread} unread` : "All caught up"}</small>
+          </div>
+          {items.length ? (
+            items.map(({ n, incoming, when, text }) => (
+              <button key={n.id + (incoming ? "-in" : "-out")} role="menuitem" className={`bell-item ${incoming && !n.read_at && n.status === "unread" ? "unread" : ""}`} onClick={() => openPlan(n.plan_id)}>
+                <span className="bell-risk" style={{ background: RISK_COLOR[n.max_risk] }} />
+                <span>
+                  {text}
+                  <small>
+                    {plans.find((p) => p.id === n.plan_id)?.name ?? n.subject.split(" — ")[1] ?? "Proposal"} · {n.max_risk} · {timeAgo(when)}
+                  </small>
+                </span>
+              </button>
+            ))
+          ) : (
+            <p className="bell-empty">
+              No activity yet. You are notified here when another operator's
+              landing puts your assets at risk, and when neighbours respond to
+              your proposals.
+            </p>
+          )}
+          <button className="bell-all" onClick={() => { useMission.getState().setMode("notices"); setOpen(false); }}>
+            Open coordination <Icon name="ArrowRight" size={13} />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -110,6 +180,11 @@ export function AccountMenu() {
     org = useMission((s) => s.organization);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [members, setMembers] = useState<Member[] | null>(null);
+  useEffect(() => {
+    if (open && user)
+      api.members().then(setMembers).catch(() => setMembers([]));
+  }, [open, user]);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -189,6 +264,32 @@ export function AccountMenu() {
               </>
             )}
           </dl>
+          <div className="account-section">
+            <span>Team · {members?.length ?? "…"}</span>
+            {members?.map((m) => (
+              <div key={m.id} className="member-row">
+                <span className="avatar small">{initials(m.name) || "?"}</span>
+                <span>
+                  {m.name}
+                  <small>{m.email}</small>
+                </span>
+                <em>{m.role === "admin" ? "Admin" : "Member"}</em>
+              </div>
+            ))}
+            {org.invite_code && (
+              <p className="account-note">
+                Share the invite code above to add teammates to {org.name}.
+              </p>
+            )}
+          </div>
+          <div className="account-links">
+            <button onClick={() => { useMission.getState().setMode("method"); setOpen(false); }}>
+              <Icon name="CircleHelp" size={14} /> Model & assumptions
+            </button>
+            <button onClick={() => { useMission.getState().setMode("pricing"); setOpen(false); }}>
+              <Icon name="Flag" size={14} /> Plans & pricing
+            </button>
+          </div>
           {user.demo && (
             <p className="account-note">
               Demo account of a fictional organization.

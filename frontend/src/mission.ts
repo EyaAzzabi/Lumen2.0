@@ -1,9 +1,7 @@
-import { flushDraft } from "./draftLifecycle";
 import { create } from "zustand";
 import {
   api,
   type Assessment,
-  type AssetLimit,
   type Asset,
   type Brief,
   type Footprint,
@@ -65,11 +63,6 @@ interface Mission {
   signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
   signOut: () => Promise<void>;
 
-  resolutionNoticeId: string | null;
-  assetLimits: AssetLimit[];
-  draftStatus: "loading" | "saved" | "saving" | "error" | "idle";
-  draftError: string | null;
-  draftSavedAt: number | null;
   missionReady: boolean;
   preview: {
     site: Pt;
@@ -143,6 +136,15 @@ interface Mission {
   simulate: () => Promise<void>;
   filePlan: () => Promise<string | null>;
   notify: (text: string) => void;
+  /** Previous touchdown point, offered as "Undo" after adopting a site. */
+  undoSite: { site: Pt; label: string } | null;
+  adoptSite: (site: Pt, label: string) => void;
+  undoAdopt: () => void;
+  /** Plan to open when the user arrives from the notification list. */
+  focusPlanId: string | null;
+  /** Map picking for asset registration. */
+  pickingAsset: boolean;
+  assetPick: Pt | null;
 }
 
 let toastTimer: ReturnType<typeof setTimeout>;
@@ -161,30 +163,8 @@ export const useMission = create<Mission>((set, get) => ({
       notices: [],
       editingPlanId: null,
       editingRevision: null,
-      lander: {
-        label: "Light robotic lander",
-        thrust_kn: 4,
-        hover_s: 25,
-        dispersion_m: 150,
-      },
-      site: { x: 0, y: 0 },
-      presetId: "clps",
-      window: `${new Date(Date.now() + 3600000).toISOString()} / ${new Date(Date.now() + 7200000).toISOString()}`,
-      searchRadius: 4000,
-      traverseCost: 2,
-      maxSlope: 8,
-      clearance: 300,
-      resolutionNoticeId: null,
       missionReady: false,
       preview: null,
-      assessment: null,
-      footprint: null,
-      optimization: null,
-      brief: null,
-      selectedAsset: null,
-      assetLimits: [],
-      missionName: "",
-      revision: get().revision + 1,
       coordinationError: null,
     }),
   signIn: async (email, password) => {
@@ -196,22 +176,10 @@ export const useMission = create<Mission>((set, get) => ({
     await get().refresh();
   },
   signOut: async () => {
-    await flushDraft();
     try {
       await api.logout();
     } finally {
       set({
-        resolutionNoticeId: null,
-        missionReady: false,
-        preview: null,
-        assessment: null,
-        footprint: null,
-        optimization: null,
-        brief: null,
-        missionName: "",
-        assetLimits: [],
-        selectedAsset: null,
-        revision: get().revision + 1,
         session: null,
         user: null,
         organization: null,
@@ -226,11 +194,6 @@ export const useMission = create<Mission>((set, get) => ({
       get().setMode("gateway");
     }
   },
-  resolutionNoticeId: null,
-  assetLimits: [],
-  draftStatus: "idle",
-  draftError: null,
-  draftSavedAt: null,
   missionReady: false,
   preview: null,
   mode: "gateway",
@@ -393,15 +356,28 @@ export const useMission = create<Mission>((set, get) => ({
     }
   },
   switchOperator: async (actingId) => {
-    await flushDraft();
     set({ busy: "session", coordinationError: null });
     try {
       const session = await api.demoSession(actingId);
-      get().applySession(session);
-      set({
+      set((s) => ({
+        session,
+        user: session.user ?? null,
+        organization: session.organization ?? null,
+        actingId: session.organization_id!,
+        notices: [],
+        plans: [],
+        selectedAsset: null,
+        editingPlanId: null,
+        editingRevision: null,
         busy: null,
-        registryFilter: { operator: "all", type: "all", region: "all" },
-      });
+        registryFilter: {
+          ...s.registryFilter,
+          operator:
+            s.registryFilter.operator === s.actingId
+              ? actingId
+              : s.registryFilter.operator,
+        },
+      }));
       await get().refresh();
     } catch (e) {
       set({
@@ -495,7 +471,6 @@ export const useMission = create<Mission>((set, get) => ({
         traverse_meur_per_km: traverseCost,
         max_slope_deg: maxSlope,
         clearance_m: clearance,
-        asset_limits: get().assetLimits,
       });
       if (get().revision === revision) {
         set({
@@ -516,11 +491,8 @@ export const useMission = create<Mission>((set, get) => ({
     try {
       const brief = await api.brief(
         lander,
-        site,
-        optimization?.target.site.x === site.x &&
-          optimization?.target.site.y === site.y
-          ? (optimization.best?.site ?? null)
-          : null,
+        optimization?.target.site ?? site,
+        optimization?.best?.site ?? null,
       );
       if (get().revision === revision) set({ brief, busy: null });
     } catch (e) {
@@ -558,8 +530,6 @@ export const useMission = create<Mission>((set, get) => ({
         operator_id: actingId,
         name: missionName,
         window,
-        asset_limits: get().assetLimits,
-        resolution_notice_id: get().resolutionNoticeId,
       };
       const editing = get().editingPlanId;
       const r = editing
@@ -582,9 +552,33 @@ export const useMission = create<Mission>((set, get) => ({
   },
   notify: (toast) => {
     clearTimeout(toastTimer);
-    set({ toast });
+    set({ toast, undoSite: null });
     toastTimer = setTimeout(() => set({ toast: null }), 6500);
   },
+  undoSite: null,
+  adoptSite: (site, label) => {
+    const previous = get().site;
+    get().moveSite(site, true);
+    get().focus("site");
+    clearTimeout(toastTimer);
+    set({
+      toast: `${label} adopted · reassessing exposure at the new touchdown point.`,
+      undoSite: { site: previous, label },
+    });
+    toastTimer = setTimeout(() => set({ toast: null, undoSite: null }), 9000);
+  },
+  undoAdopt: () => {
+    const u = get().undoSite;
+    if (!u) return;
+    clearTimeout(toastTimer);
+    set({ toast: null, undoSite: null });
+    get().moveSite(u.site, true);
+    get().focus("site");
+    get().notify("Previous touchdown point restored.");
+  },
+  focusPlanId: null,
+  pickingAsset: false,
+  assetPick: null,
 }));
 
 export function elevationAt(

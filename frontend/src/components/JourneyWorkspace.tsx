@@ -1,7 +1,3 @@
-import ObjectionResolution, {
-  ProtectionConstraints,
-} from "./ObjectionResolution";
-import { DraftStatus, ScientificEvidence } from "./WorkspaceEvidence";
 import {
   useEffect,
   useMemo,
@@ -12,7 +8,7 @@ import {
 import { api, fmtKm, fmtMeur, fmtPct, RISK_COLOR, type Pt } from "../api";
 import { useMission, elevationAt } from "../mission";
 import { Icon } from "./Icon";
-import { Markdown } from "../ui";
+import { Markdown, Term } from "../ui";
 import PlanHistory from "./PlanHistory";
 import NumericInput from "./NumericInput";
 
@@ -40,7 +36,10 @@ export function JourneyRail() {
   const mode = useMission((s) => s.mode),
     ready = useMission((s) => s.missionReady),
     name = useMission((s) => s.missionName),
-    organization = useMission((s) => s.organization);
+    organization = useMission((s) => s.organization),
+    assessed = useMission((s) => !!s.assessment),
+    filed = useMission((s) => s.plans.some((p) => p.operator_id === s.actingId));
+  const done = [ready, assessed, filed];
   const index =
     mode === "setup"
       ? 0
@@ -60,11 +59,15 @@ export function JourneyRail() {
             aria-label={step.name}
             aria-current={index === i ? "step" : undefined}
             disabled={i === 1 && !ready}
-            className={index === i ? "active" : ""}
+            className={`${index === i ? "active" : ""} ${done[i] ? "done" : ""}`}
             onClick={() => useMission.getState().setMode(step.mode)}
           >
             <span className="step-number">
-              {String(i + 1).padStart(2, "0")}
+              {done[i] && index !== i ? (
+                <Icon name="Check" size={14} />
+              ) : (
+                String(i + 1).padStart(2, "0")
+              )}
             </span>
             <span>
               <b>{step.name}</b>
@@ -74,6 +77,7 @@ export function JourneyRail() {
           </button>
         ))}
       </div>
+      <Onboarding />
       <div className="journey-rail-summary">
         <span>CURRENT MISSION</span>
         <b>{name || "Not configured yet"}</b>
@@ -83,40 +87,6 @@ export function JourneyRail() {
             : "Start with a name and a vehicle"}
         </small>
       </div>
-      <button
-        className="action-text"
-        disabled={useMission((s) => s.draftStatus) === "loading"}
-        onClick={() => {
-          const s = useMission.getState();
-          useMission.setState({
-            missionName: "",
-            missionReady: false,
-            editingPlanId: null,
-            editingRevision: null,
-            resolutionNoticeId: null,
-            assetLimits: [],
-            selectedAsset: null,
-            assessment: null,
-            footprint: null,
-            optimization: null,
-            brief: null,
-            preview: null,
-            lander: {
-              label: "Light robotic lander",
-              thrust_kn: 4,
-              hover_s: 25,
-              dispersion_m: 150,
-            },
-            presetId: "clps",
-            site: { x: 0, y: 0 },
-            revision: s.revision + 1,
-            window: `${new Date(Date.now() + 3600000).toISOString()} / ${new Date(Date.now() + 7200000).toISOString()}`,
-          });
-          s.setMode("setup");
-        }}
-      >
-        New mission
-      </button>
       <details className="journey-more">
         <summary>More tools</summary>
         {(
@@ -139,6 +109,68 @@ export function JourneyRail() {
         </span>
       </div>
     </nav>
+  );
+}
+/** First-run checklist for organizations that are not set up yet. */
+function Onboarding() {
+  const user = useMission((s) => s.user),
+    org = useMission((s) => s.organization),
+    ownAssets = useMission((s) => s.assets.some((a) => a.operator_id === s.actingId)),
+    assessed = useMission((s) => !!s.assessment);
+  const key = `plume.onboarding.${org?.id}`;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(key) === "done";
+    } catch {
+      return false;
+    }
+  });
+  const [team, setTeam] = useState<number | null>(null);
+  useEffect(() => {
+    if (user && !user.demo) api.members().then((m) => setTeam(m.length)).catch(() => setTeam(null));
+  }, [user, org?.id]);
+  if (!user || user.demo || !org || hidden) return null;
+  const items: [boolean, string, () => void][] = [
+    [ownAssets, "Register your first asset", () => {
+      useMission.setState({ pickingAsset: true });
+      useMission.getState().setMode("registry");
+    }],
+    [(team ?? 0) > 1, org.invite_code ? `Invite a teammate · code ${org.invite_code}` : "Invite a teammate", () => {
+      if (org.invite_code) {
+        void navigator.clipboard?.writeText(org.invite_code);
+        useMission.getState().notify(`Invite code ${org.invite_code} copied. Share it with a teammate.`);
+      }
+    }],
+    [assessed, "Run your first assessment", () => useMission.getState().setMode("setup")],
+  ];
+  const complete = items.filter((i) => i[0]).length;
+  return (
+    <div className="onboarding">
+      <div className="onboarding-head">
+        <b>Get started</b>
+        <small>{complete} / 3</small>
+        <button
+          className="icon-button"
+          aria-label="Hide checklist"
+          onClick={() => {
+            try {
+              localStorage.setItem(key, "done");
+            } catch {
+              /* session-only */
+            }
+            setHidden(true);
+          }}
+        >
+          <Icon name="X" size={13} />
+        </button>
+      </div>
+      {items.map(([ok, label, run], i) => (
+        <button key={i} className={ok ? "ok" : ""} disabled={ok} onClick={run}>
+          <span>{ok ? <Icon name="Check" size={12} /> : i + 1}</span>
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 export function JourneyCanvas() {
@@ -383,6 +415,18 @@ export function AnalysisWorkspace() {
   const dominant = result
     ? Object.entries(result.mechanisms).sort((a, b) => b[1] - a[1])[0][0]
     : "";
+  const effect = (r: NonNullable<typeof worst>, name: string) => {
+    const m = Object.entries(r.mechanisms).sort((a, b) => b[1] - a[1])[0][0];
+    return m === "impact"
+      ? `pelt ${name} with gravel`
+      : m === "coating"
+        ? `coat ${name} in dust`
+        : `sandblast ${name}`;
+  };
+  const verdictSentence =
+    worst && worst.risk !== "negligible"
+      ? `This landing would ${effect(worst, worstAsset?.name ?? worst.asset_id)} (${fmtPct(worst.damage_fraction)} damage, ${fmtMeur(worst.expected_loss_meur)}).`
+      : "No registered asset reaches elevated exposure at this touchdown point.";
   return (
     <aside
       className="journey-panel analysis-workspace"
@@ -422,7 +466,6 @@ export function AnalysisWorkspace() {
         </div>
       </div>
       <div className="journey-panel-body">
-        <ScientificEvidence />
         {!assessment ? (
           <div className="journey-loading">
             {busy && <span className="spin" />}
@@ -433,7 +476,7 @@ export function AnalysisWorkspace() {
             </h3>
             <p>
               {analysisError ||
-                "Calculating asset exposure and the reference footprint."}
+                `Simulating 4 grain classes over 48 touchdown samples for ${assets.length} registered assets, then a 96 × 96 footprint (9,216 map points).`}
             </p>
             <button
               className="action-text"
@@ -455,15 +498,14 @@ export function AnalysisWorkspace() {
                     } as CSSProperties
                   }
                 >
-                  <span>MODELED INFRASTRUCTURE LOSS</span>
+                  <span>
+                    <Term tip="Expected damage to all registered assets, in euros, from the physics model.">MODELED INFRASTRUCTURE LOSS</Term>
+                  </span>
                   <strong>
                     {fmtMeur(assessment.summary.expected_loss_meur)}
                   </strong>
-                  <p>
-                    {assessment.summary.assets_at_risk
-                      ? `${assessment.summary.assets_at_risk} asset${assessment.summary.assets_at_risk === 1 ? "" : "s"} at elevated or critical exposure`
-                      : "No asset at elevated or critical exposure in this model"}
-                  </p>
+                  <p className="verdict-sentence">{verdictSentence}</p>
+                  <SourceLine />
                 </div>
                 <div className="guidance-card">
                   <Icon name="ShieldCheck" size={19} />
@@ -530,12 +572,15 @@ export function AnalysisWorkspace() {
                     { "--severity": RISK_COLOR[result.risk] } as CSSProperties
                   }
                 >
-                  <span>MEAN MODELED DAMAGE</span>
+                  <span>
+                    <Term tip="Average fraction of the asset's value lost, over all possible touchdown points. Not a failure probability.">MEAN MODELED DAMAGE</Term>
+                  </span>
                   <strong>{fmtPct(result.damage_fraction)}</strong>
                   <p>
                     {fmtMeur(result.expected_loss_meur)} modeled loss ·{" "}
                     {fmtKm(result.distance_m)} away
                   </p>
+                  <SourceLine />
                 </div>
                 <p className="plain-explanation">
                   {result.risk === "negligible"
@@ -547,11 +592,17 @@ export function AnalysisWorkspace() {
                 </p>
                 <TerrainProfile />
                 <dl className="data-list">
-                  <dt>Energy exposure</dt>
+                  <dt>
+                    <Term>Energy exposure</Term>
+                  </dt>
                   <dd>{result.energy_fluence_j_m2.toExponential(2)} J/m²</dd>
-                  <dt>Fine dust</dt>
+                  <dt>
+                    <Term>Fine dust</Term>
+                  </dt>
                   <dd>{result.dust_mass_g_m2.toPrecision(3)} g/m²</dd>
-                  <dt>Sample q95 / worst</dt>
+                  <dt>
+                    <Term>Sample q95 / worst</Term>
+                  </dt>
                   <dd>
                     {fmtPct(result.uncertainty?.q95 ?? result.damage_fraction)}{" "}
                     /{" "}
@@ -578,7 +629,6 @@ export function AnalysisWorkspace() {
                     </p>
                   </div>
                 )}
-                <ProtectionConstraints />
                 <details className="journey-details">
                   <summary>Search preferences</summary>
                   {(
@@ -629,12 +679,19 @@ export function AnalysisWorkspace() {
                   onClick={() => void optimize()}
                 >
                   {busy === "optimizer"
-                    ? "Evaluating sites…"
+                    ? "Screening ≈1,800 candidate sites…"
                     : opt
                       ? "Recalculate alternatives"
                       : "Find alternative sites"}
                   <Icon name="Sparkles" size={17} />
                 </button>
+                {busy === "optimizer" && (
+                  <p className="panel-note" role="status">
+                    Checking slope and clearance at every candidate, scoring
+                    damage to all registered assets, then re-scoring the best 8
+                    over 48 touchdown samples.
+                  </p>
+                )}
                 {opt && !candidate && (
                   <p>
                     No feasible alternative was found. Adjust your search
@@ -665,6 +722,11 @@ export function AnalysisWorkspace() {
                         ))}
                       </select>
                     </label>
+                    <p className="comparison-headline">
+                      {opt.target.summary.expected_loss_meur > 0
+                        ? `Moving ${fmtKm(candidate.distance_from_target_m)} cuts modeled damage to neighbours by ${Math.round((1 - candidate.expected_loss_meur / opt.target.summary.expected_loss_meur) * 100)}%.`
+                        : "The requested site already has no modeled damage."}
+                    </p>
                     <div className="comparison-cards">
                       <div>
                         <span>ORIGINAL</span>
@@ -679,14 +741,28 @@ export function AnalysisWorkspace() {
                         <small>modeled damage loss</small>
                       </div>
                     </div>
+                    <p className="source-line">
+                      Optimizer · {opt.search.candidates.toLocaleString()} sites screened ·{" "}
+                      {opt.search.feasible.toLocaleString()} feasible ·{" "}
+                      {(opt.compute_ms / 1000).toFixed(1)} s
+                      <LimitsBadge />
+                    </p>
                     <dl className="data-list">
-                      <dt>Relocation</dt>
+                      <dt>
+                        <Term>Relocation</Term>
+                      </dt>
                       <dd>{fmtKm(candidate.distance_from_target_m)}</dd>
-                      <dt>Relocation cost</dt>
+                      <dt>
+                        <Term>Relocation cost</Term>
+                      </dt>
                       <dd>{fmtMeur(candidate.traverse_meur)}</dd>
-                      <dt>Total objective</dt>
+                      <dt>
+                        <Term>Total objective</Term>
+                      </dt>
                       <dd>{fmtMeur(candidate.total_cost_meur)}</dd>
-                      <dt>Terrain slope</dt>
+                      <dt>
+                        <Term>Terrain slope</Term>
+                      </dt>
                       <dd>{candidate.slope_deg.toFixed(1)}°</dd>
                     </dl>
                     <div
@@ -731,11 +807,11 @@ export function AnalysisWorkspace() {
                       className="outline-button full"
                       disabled={!!busy || previewBusy}
                       onClick={() => {
-                        useMission
-                          .getState()
-                          .moveSite({ x: candidate.x, y: candidate.y }, true);
+                        useMission.getState().adoptSite(
+                          { x: candidate.x, y: candidate.y },
+                          candidateIndex === 0 ? "Best evaluated site" : `Alternative ${candidateIndex}`,
+                        );
                         setTab("summary");
-                        useMission.getState().focus("site");
                       }}
                     >
                       Use this landing site <Icon name="Check" size={17} />
@@ -788,8 +864,8 @@ export function AnalysisWorkspace() {
                   <>
                     <span className="brief-source">
                       {brief.source === "claude"
-                        ? `AI narrative · ${brief.model}`
-                        : "Offline model-based explanation · deterministic template"}
+                        ? `AI explanation (${brief.model}) · figures come from the physics engine`
+                        : "Template explanation (offline) · figures come from the physics engine"}
                     </span>
                     <Markdown text={brief.markdown} />
                   </>
@@ -804,7 +880,6 @@ export function AnalysisWorkspace() {
         )}
       </div>
       <div className="journey-panel-foot">
-        <DraftStatus />
         {tab === "summary" || tab === "asset" ? (
           <button
             className="action-primary full"
@@ -874,7 +949,9 @@ export function CoordinationWorkspace() {
     editing = useMission((s) => s.editingPlanId),
     editingRevision = useMission((s) => s.editingRevision),
     coordinationError = useMission((s) => s.coordinationError);
-  const [selected, setSelected] = useState(""),
+  const [selected, setSelected] = useState(
+      () => useMission.getState().focusPlanId ?? "",
+    ),
     [noticeId, setNoticeId] = useState(""),
     [reply, setReply] = useState(""),
     [pending, setPending] = useState(false),
@@ -885,7 +962,16 @@ export function CoordinationWorkspace() {
       n.plan_id === plan?.id && (n.revision ?? 1) === (plan?.revision ?? 1),
   );
   const notice = current.find((n) => n.id === noticeId) ?? current[0];
+  const focusPlanId = useMission((s) => s.focusPlanId);
   useEffect(() => {
+    if (focusPlanId) {
+      setSelected(focusPlanId);
+      setNoticeId("");
+      useMission.setState({ focusPlanId: null });
+    }
+  }, [focusPlanId]);
+  useEffect(() => {
+    if (useMission.getState().focusPlanId) return;
     setSelected("");
     setNoticeId("");
     setReply("");
@@ -926,14 +1012,6 @@ export function CoordinationWorkspace() {
     s.moveSite(plan.site);
     useMission.setState({
       missionReady: true,
-      resolutionNoticeId: null,
-      assetLimits: Object.entries(plan.protection?.limits ?? {}).map(
-        ([asset_id, max_damage_fraction]) => ({
-          asset_id,
-          max_damage_fraction,
-        }),
-      ),
-      selectedAsset: null,
       missionName: plan.name,
       window: plan.window,
       editingPlanId: plan.id,
@@ -1016,7 +1094,6 @@ export function CoordinationWorkspace() {
                 className="action-text full"
                 onClick={() =>
                   useMission.setState({
-                    resolutionNoticeId: null,
                     editingPlanId: null,
                     editingRevision: null,
                   })
@@ -1159,20 +1236,13 @@ export function CoordinationWorkspace() {
               </>
             )}
             {plan?.operator_id === acting && plan.status !== "withdrawn" && (
-              <ObjectionResolution
-                key={`${plan.id}:${plan.revision}`}
-                plan={plan}
-                notices={current}
-              />
-            )}
-            {plan?.operator_id === acting && plan.status !== "withdrawn" && (
               <button className="outline-button full" onClick={revise}>
                 Compare a revision <Icon name="ArrowRight" size={16} />
               </button>
             )}
             {plan && (
-              <details className="journey-details">
-                <summary>Revision history & evidence</summary>
+              <details className="journey-details" open>
+                <summary>Activity & revision history</summary>
                 <PlanHistory planId={plan.id} />
               </details>
             )}
@@ -1182,9 +1252,15 @@ export function CoordinationWorkspace() {
             <Icon name="Radio" size={32} />
             <h3>No proposal yet.</h3>
             <p>
-              Submit your analyzed draft to create consultations for affected
-              operators. They will appear here when persisted.
+              {assessment
+                ? "Submit your analyzed draft above: every operator whose assets are at risk is notified automatically."
+                : "Analyze a mission first, then file it here. Proposals from other operators that affect your assets also appear here."}
             </p>
+            {!assessment && (
+              <button className="outline-button full" onClick={() => useMission.getState().setMode("setup")}>
+                Prepare a mission <Icon name="ArrowRight" size={15} />
+              </button>
+            )}
           </div>
         )}
         <p className="panel-note">
@@ -1201,5 +1277,30 @@ export function CoordinationWorkspace() {
         </button>
       </div>
     </aside>
+  );
+}
+
+/** Where a number comes from, shown under every headline figure. */
+function SourceLine() {
+  const assessment = useMission((s) => s.assessment);
+  if (!assessment) return null;
+  return (
+    <p className="source-line">
+      Physics engine · {assessment.compute_ms.toFixed(0)} ms · averaged over{" "}
+      {assessment.uncertainty?.valid_samples ?? 48} touchdown samples
+      <LimitsBadge />
+    </p>
+  );
+}
+
+function LimitsBadge() {
+  return (
+    <button
+      className="limits-badge"
+      title="Calibrated ballistic model on synthetic terrain. Open the method page."
+      onClick={() => useMission.getState().setMode("method")}
+    >
+      Simplified model · not flight-certified
+    </button>
   );
 }

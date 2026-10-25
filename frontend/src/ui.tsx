@@ -44,3 +44,30 @@ export function Markdown({ text }: { text: string }) {
   flush();
   return <div className="brief">{out}</div>;
 }
+
+/** Plain-language meaning of the physics and planning terms shown in the UI. */
+export const GLOSSARY: Record<string, string> = {
+  "Engine thrust": "How hard the engine pushes. More thrust digs up more regolith and throws it faster.",
+  "Low-altitude hover": "Seconds spent close to the ground before touchdown, when the exhaust erodes the surface.",
+  "Landing dispersion": "How far off target the lander may touch down (1 standard deviation). Risk is averaged over 48 possible touchdown points.",
+  "Energy exposure": "How hard the dust hits: kinetic energy of ejecta per square metre of the asset's exposed face.",
+  "Fine dust": "Grams of fine dust and sand per square metre landing on the asset's exposed face. Coats solar cells and optics.",
+  "Mean modeled damage": "Average fraction of the asset's value lost, over all possible touchdown points. Not a failure probability.",
+  "Sample q95 / worst": "95th-percentile and worst damage among the touchdown samples. Not a confidence interval.",
+  "Relocation": "Distance between your requested touchdown point and this alternative.",
+  "Relocation cost": "Estimated extra cost of moving cargo over the surface from the alternative site.",
+  "Total objective": "Modeled damage to everyone's assets plus relocation cost. The optimizer minimizes this.",
+  "Terrain slope": "Ground slope at the site. Sites steeper than the maximum are excluded.",
+  "Modeled infrastructure loss": "Expected damage to all registered assets of other operators, in euros, from the physics model.",
+};
+
+/** A term with a dotted underline that explains itself on hover or focus. */
+export function Term({ children, tip }: { children: string; tip?: string }) {
+  const text = tip ?? GLOSSARY[children];
+  if (!text) return <>{children}</>;
+  return (
+    <span className="term" tabIndex={0} data-tip={text} aria-label={`${children}: ${text}`}>
+      {children}
+    </span>
+  );
+}

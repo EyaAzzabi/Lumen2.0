@@ -242,7 +242,7 @@ export function Pricing() {
           </p>
           <p>
             You can explore the working registry, assessments and coordination
-            workflow with an account or explicit local demo sign-in. No payment is required.
+            workflow through demo access. No payment or account is required.
           </p>
           <button
             className="action-primary full"

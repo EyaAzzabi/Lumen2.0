@@ -76,5 +76,3 @@ Sessions use HttpOnly cookies and CSRF rather than browser localStorage tokens.
 The six published demo accounts remain opt-in and loopback-only. There is no
 silent Kestrel sign-in. See [merge notes](docs/AUTH_MERGE.md) for the exact conflict
 resolutions and deployment limits. Existing V2 production fail-closed rules stay.
-
-Workspace updates: [persistent drafts and objection resolution](docs/WORKSPACE_RESOLUTION.md), [jury demonstration](docs/JURY_DEMO.md).
