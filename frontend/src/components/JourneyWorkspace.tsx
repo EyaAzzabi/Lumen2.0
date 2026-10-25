@@ -1029,7 +1029,7 @@ export function AnalysisWorkspace() {
                     <span className="brief-source">
                       {brief.source !== "template"
                         ? `AI explanation (${brief.source === "openai" ? "OpenAI" : "Claude"} ${brief.model}) · figures come from the physics engine`
-                        : "Template explanation (offline) · figures come from the physics engine"}
+                        : `Template explanation · ${brief.reason ?? "offline"} · figures come from the physics engine`}
                     </span>
                     {brief.structured ? (
                       <BriefCards brief={brief.structured} />
@@ -1361,8 +1361,9 @@ export function CoordinationWorkspace() {
             </ol>
             {!current.length && (
               <p className="panel-note">
-                No current consultation is visible to your organization. Filing
-                without recipients is not safety approval.
+                {plan?.operator_id === acting
+                  ? "No neighbour's asset is above negligible modeled exposure for this revision, so nobody needed to be consulted. Filing without recipients is not safety approval."
+                  : "No current consultation for this revision is addressed to your organization."}
               </p>
             )}
             {notice && (
@@ -1660,9 +1661,9 @@ function MissionContext() {
   );
 }
 
-function sourceLabel(a: { source: string; model?: string }) {
+function sourceLabel(a: { source: string; model?: string; reason?: string }) {
   return a.source === "template"
-    ? "Offline answer from the assessment data"
+    ? `Answer from the assessment data · ${a.reason ?? "offline"}`
     : `AI answer (${a.source === "openai" ? "OpenAI" : "Claude"} ${a.model ?? ""}) · figures from the physics engine`;
 }
 

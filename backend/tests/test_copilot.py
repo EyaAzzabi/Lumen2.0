@@ -83,6 +83,27 @@ class CopilotGrounding(unittest.TestCase):
     def test_copying_the_few_shot_example_is_rejected(self):
         self.assertEqual(self.run_brief(json.dumps(copilot.BRIEF_EXAMPLE_OUT))["source"], "template")
 
+    def test_rejected_answer_gets_one_corrective_retry(self):
+        replies = iter([self.good(situation="It saves 42.42% overall."), self.good()])
+        seen = []
+        client = SimpleNamespace(
+            close=lambda: None,
+            messages=SimpleNamespace(create=lambda **kw: (seen.append(kw["messages"]), SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=next(replies))], stop_reason="end_turn", model="fake"))[1]),
+        )
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test", "PLUME_LLM_PROVIDER": ""}):
+            with patch.dict(sys.modules, {"anthropic": SimpleNamespace(Anthropic=lambda **kw: client)}):
+                r = copilot.brief(LANDER, self.assessment, self.assets, self.ops)
+        self.assertEqual((r["source"], r["attempts"]), ("claude", 2))
+        self.assertIn("42.42", seen[1][-1]["content"])  # the model is told what was wrong
+
+    def test_fallback_reason_is_explicit(self):
+        r = self.run_brief(self.good(situation="Damage is 42.42% everywhere."))
+        self.assertIn("numbers not in the data: 42.42", r["reason"])
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "OPENAI_API_KEY": "", "PLUME_LLM_PROVIDER": ""}):
+            self.assertEqual(copilot.brief(LANDER, self.assessment, self.assets, self.ops)["reason"],
+                             "no language model configured")
+
     def ask(self, reply, kind="why"):
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test", "PLUME_LLM_PROVIDER": ""}):
             with patch.dict(sys.modules, {"anthropic": fake_model(reply)}):

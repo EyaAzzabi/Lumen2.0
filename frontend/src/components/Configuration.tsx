@@ -16,6 +16,8 @@ export function MissionFields() {
         MISSION IDENTIFIER
         <input
           maxLength={80}
+          name="plume-mission-identifier"
+          autoComplete="off"
           value={name}
           onChange={(e) => useMission.setState({ missionName: e.target.value })}
         />

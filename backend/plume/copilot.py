@@ -11,6 +11,7 @@ which path produced the text.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -133,20 +134,61 @@ def _narrate(system: str, messages: list[dict], json_mode: bool) -> tuple[str, s
 
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+log = logging.getLogger("plume.copilot")
+ATTEMPTS = 2  # one corrective retry when the guard rejects an answer
 
 
-def _numbers_grounded(texts: list[str], *sources: object) -> bool:
-    """Every literal number in the output must appear in the inputs.
+class GuardRejected(ValueError):
+    """The model answered, but the answer broke a grounding rule."""
+
+
+def _unsupported_numbers(texts: list[str], *sources: object) -> set[str]:
+    """Literal numbers in the output that do not appear in the inputs.
 
     Conservative token check, not a semantic truth validator. Numbered-list
     markers ("1. ") are formatting, not figures.
     """
     allowed = set(_NUMBER.findall(" ".join(json.dumps(s, ensure_ascii=False) for s in sources)))
+    found: set[str] = set()
     for t in texts:
-        figures = re.sub(r"(?m)^\s*\d+\.\s", "", t)
-        if not set(_NUMBER.findall(figures)).issubset(allowed):
-            return False
-    return True
+        found |= set(_NUMBER.findall(re.sub(r"(?m)^\s*\d+\.\s", "", t)))
+    return found - allowed
+
+
+def _numbers_grounded(texts: list[str], *sources: object) -> bool:
+    return not _unsupported_numbers(texts, *sources)
+
+
+def _guarded(system: str, messages: list[dict], check) -> tuple[object, str, str, int]:
+    """Call the model; if `check` rejects the answer, say why and retry once.
+
+    `check(text)` returns the accepted result or raises GuardRejected. Returns
+    (result, source, model, attempts).
+    """
+    messages = list(messages)
+    for attempt in range(1, ATTEMPTS + 1):
+        text, source, model = _narrate(system, messages, json_mode=True)
+        try:
+            return check(text), source, model, attempt
+        except GuardRejected as rejected:
+            if attempt == ATTEMPTS:
+                raise
+            log.info("copilot answer rejected (%s); retrying", rejected)
+            messages += [
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": f"Your answer was rejected: {rejected}. Rewrite it following "
+                                            "the rules, using only names and numbers that appear in the "
+                                            "data, quoted exactly. Answer with the JSON object only."},
+            ]
+    raise RuntimeError("unreachable")
+
+
+def _fallback_reason(exc: Exception) -> str:
+    if isinstance(exc, GuardRejected):
+        return f"answer rejected by the grounding check ({exc})"
+    if str(exc) == "LLM not configured":
+        return "no language model configured"
+    return f"language model unavailable ({type(exc).__name__})"
 
 
 def _parse_json(text: str) -> dict | None:
@@ -238,9 +280,17 @@ def _payload(lander, assessment, digest, optimized_digest=None, optimized=None):
         "assets": digest,
     }
     if optimized:
+        before = assessment["summary"]["expected_loss_meur"]
+        after = optimized["summary"]["expected_loss_meur"]
         payload["optimised_alternative"] = {
             "site": {"x_m": round(optimized["site"]["x"]), "y_m": round(optimized["site"]["y"])},
-            "total_expected_loss": _fmt_meur(optimized["summary"]["expected_loss_meur"]),
+            "total_expected_loss": _fmt_meur(after),
+            # Pre-computed here so the model never has to do arithmetic.
+            "expected_loss_reduction": _fmt_meur(max(before - after, 0.0)),
+            "expected_loss_reduction_pct": round(100 * (1 - after / before)) if before > 0 else 0,
+            "relocation_km": round(
+                ((optimized["site"]["x"] - assessment["site"]["x"]) ** 2
+                 + (optimized["site"]["y"] - assessment["site"]["y"]) ** 2) ** 0.5 / 1000, 2),
             "assets": optimized_digest,
         }
     return payload
@@ -315,44 +365,51 @@ def brief(
     opt_digest = _assessment_digest(assets_by_id, ops, optimized) if optimized else None
     payload = _payload(lander, assessment, digest, opt_digest, optimized)
     t0 = time.perf_counter()
+
+    def check(text: str):
+        if not text:
+            raise GuardRejected("empty answer")
+        data = _parse_json(text)
+        structured = _valid_brief(data, digest) if data is not None else None
+        if data is not None and structured is None:
+            raise GuardRejected("asset names or risk levels do not match the assessment, or fields are missing")
+        checked = (
+            [structured["situation"], structured["limitations"], *structured["actions"], *(r["why"] for r in structured["risks"])]
+            if structured
+            else [text]
+        )
+        bad = _unsupported_numbers(checked, payload)
+        if bad:
+            raise GuardRejected("numbers not in the data: " + ", ".join(sorted(bad)))
+        return structured, text
+
     try:
-        text, source, model = _narrate(
+        (structured, text), source, model, attempts = _guarded(
             SYSTEM,
             [
                 {"role": "user", "content": json.dumps(BRIEF_EXAMPLE_IN, ensure_ascii=False)},
                 {"role": "assistant", "content": json.dumps(BRIEF_EXAMPLE_OUT, ensure_ascii=False)},
                 {"role": "user", "content": "Landing plan and assessment:\n" + json.dumps(payload, indent=1, ensure_ascii=False)},
             ],
-            json_mode=True,
+            check,
         )
-        if not text:
-            raise RuntimeError("no usable text")
-        data = _parse_json(text)
-        structured = _valid_brief(data, digest) if data is not None else None
-        if data is not None and structured is None:
-            raise ValueError("Structured brief failed schema or grounding checks")
-        checked = (
-            [structured["situation"], structured["limitations"], *structured["actions"], *(r["why"] for r in structured["risks"])]
-            if structured
-            else [text]
-        )
-        if not _numbers_grounded(checked, payload):
-            raise ValueError("Narrative contains unsupported numeric tokens")
         return {
             "markdown": _brief_markdown(structured) if structured else text,
             "structured": structured,
             "source": source,
             "model": model,
+            "attempts": attempts,
             "numeric_validation": "literal tokens checked against input; semantics not certified",
             "latency_ms": round((time.perf_counter() - t0) * 1000),
         }
-    except Exception as exc:  # offline / no credentials / API error: never break the demo
-        structured = _template_structured(lander, assessment, digest, optimized)
+    except Exception as exc:  # offline / no credentials / API error / failed guard: never break the demo
+        reason = _fallback_reason(exc)
+        log.warning("copilot brief fell back to template: %s", reason)
         return {
             "markdown": _template_brief(lander, assessment, digest, optimized),
-            "structured": structured,
+            "structured": _template_structured(lander, assessment, digest, optimized),
             "source": "template",
-            "reason": type(exc).__name__,
+            "reason": reason,
             "latency_ms": round((time.perf_counter() - t0) * 1000),
         }
 
@@ -367,6 +424,8 @@ Rules:
   say so plainly and suggest which PLUME step would (compare sites, inspect an
   asset, consult the neighbour). Do not answer unrelated questions.
 - Use ONLY numbers present in the data, quoted exactly; never compute new ones.
+  Savings and relocation distance are provided under optimised_alternative.
+  Write plain sentences: no quotation marks around numbers.
 - Percentages of damage are expected value lost, never a probability or chance.
   Do not claim an asset is shielded unless terrain_shielded is true for it.
 - Explain mechanisms in plain language: erosion = sandblasting, impact = gravel
@@ -461,28 +520,35 @@ def ask(
     focus = _focus(assessment, asset, operators) if asset else None
     request = {"question": question, **({"focus_asset": focus} if focus else {}), "assessment": payload}
     t0 = time.perf_counter()
+
+    def check(text: str):
+        data = _parse_json(text) or {}
+        answer = str(data.get("answer", "")).strip()
+        points = [str(p).strip() for p in data.get("points", []) if str(p).strip()][:4]
+        if not answer:
+            raise GuardRejected("no answer field")
+        bad = _unsupported_numbers([answer, *points], request)
+        if bad:
+            raise GuardRejected("numbers not in the data: " + ", ".join(sorted(bad)))
+        return answer, points
+
     try:
-        text, source, model = _narrate(
+        (answer, points), source, model, attempts = _guarded(
             ASK_SYSTEM,
             [
                 {"role": "user", "content": json.dumps(ASK_EXAMPLE_IN, ensure_ascii=False)},
                 {"role": "assistant", "content": json.dumps(ASK_EXAMPLE_OUT, ensure_ascii=False)},
                 {"role": "user", "content": json.dumps(request, indent=1, ensure_ascii=False)},
             ],
-            json_mode=True,
+            check,
         )
-        data = _parse_json(text) or {}
-        answer = str(data.get("answer", "")).strip()
-        points = [str(p).strip() for p in data.get("points", []) if str(p).strip()][:4]
-        if not answer:
-            raise ValueError("No answer in model output")
-        if not _numbers_grounded([answer, *points], request):
-            raise ValueError("Answer contains unsupported numeric tokens")
-        return {"answer": answer, "points": points, "source": source, "model": model,
+        return {"answer": answer, "points": points, "source": source, "model": model, "attempts": attempts,
                 "latency_ms": round((time.perf_counter() - t0) * 1000)}
     except Exception as exc:  # offline / no credentials / API error / failed guard
+        reason = _fallback_reason(exc)
+        log.warning("copilot answer fell back to template: %s", reason)
         return {**_template_answer(kind, question, focus, payload), "source": "template",
-                "reason": type(exc).__name__, "latency_ms": round((time.perf_counter() - t0) * 1000)}
+                "reason": reason, "latency_ms": round((time.perf_counter() - t0) * 1000)}
 
 
 def notices_for_plan(
