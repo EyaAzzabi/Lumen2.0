@@ -78,7 +78,6 @@ def pdf_bytes(data):
         paragraph(assumption)
     if not snap:
         paragraph('Legacy record: full original assessment unavailable; not reconstructed.')
-    story.append(PageBreak())
     section('Equipment and historical assessment')
     results = {r['asset_id']:r for r in (snap.get('assessment') or {}).get('assets',[])}
     table(['Equipment / owner','Local E / N (m)','Value / million EUR','Mean damage / %','Loss / million EUR'], [[

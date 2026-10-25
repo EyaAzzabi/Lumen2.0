@@ -25,7 +25,7 @@ class ConstraintTests(unittest.TestCase):
     def test_objection_ownership_reason_and_consultation(self):
         p = self.file()
         n, rule = self.objection(p)
-        for asset in ['k-pad', 'not-an-asset']:
+        for asset in [next(a['id'] for a in api.store.assets() if a['operator_id'] != n['to_operator_id']), 'not-an-asset']:
             bad = dict(rule, asset_id=asset)
             r = self.client.patch('/api/notices/' + n['id'], json=dict(
                 status='objection', reply='Concern', constraints=[bad]),
@@ -72,6 +72,10 @@ class ConstraintTests(unittest.TestCase):
         response = self.client.patch('/api/notices/'+next_notice['id'], json=dict(status='acknowledged'), headers={'Idempotency-Key':'explicit'})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(api.store.responses(n['id'])[0]['constraints'], [rule])
+        self.login('kestrel')
+        self.assertEqual(self.post('/api/plans/'+p['id']+'/revisions', dict(body, expected_revision=2)).status_code, 409)
+        self.assertEqual(self.post('/api/plans', dict(body, expected_revision=None)).status_code, 422)
+
 
     def test_no_feasible_search_and_filing_rechecks(self):
         p = self.file()
