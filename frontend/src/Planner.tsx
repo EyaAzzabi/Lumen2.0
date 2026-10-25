@@ -289,7 +289,7 @@ export default function Planner({ meta, assets, operators, actingId, onSubmitted
             <div style={{ marginTop: 10 }}>
               <Markdown text={brief.markdown} />
               <div className="src" style={{ marginTop: 8 }}>
-                {brief.source === "claude" ? `Claude (${brief.model}) · ${brief.latency_ms} ms · figures from physics engine`
+                {brief.source !== "template" ? `${brief.source === "openai" ? "OpenAI" : "Claude"} (${brief.model}) · ${brief.latency_ms} ms · figures from physics engine`
                   : "Offline template · figures from physics engine"}
               </div>
             </div>

@@ -329,3 +329,74 @@ kbd {
 @media (max-width: 1250px) {
   .mission-toast { left: calc(50% - 120px); max-width: min(520px, 60vw); bottom: 92px; }
 }
+
+/* ---------- copilot: structured brief cards ---------- */
+.brief-cards { display: grid; gap: 10px; margin-top: 8px; }
+.brief-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff05;
+  padding: 11px 12px;
+}
+.brief-card h4 {
+  margin: 0 0 6px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.brief-card p { margin: 0; font-size: 13px; line-height: 1.5; color: #d6dee8; }
+.brief-risk {
+  --severity: var(--ok);
+  border-left: 3px solid var(--severity);
+  padding: 6px 0 6px 10px;
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+.brief-risk b { font-size: 13px; }
+.brief-risk-level {
+  color: var(--severity);
+  font: 700 10.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.brief-risk p { grid-column: 1 / -1; font-size: 12.5px; }
+.brief-actions { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 13px; line-height: 1.45; color: #d6dee8; }
+.brief-limit { margin: 0; font-size: 11.5px; color: var(--faint); font-style: italic; }
+
+/* ---------- copilot: grounded Q&A ---------- */
+.copilot-qa { display: grid; gap: 8px; margin-bottom: 12px; }
+.copilot-ask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #070d16;
+  padding: 4px 4px 4px 12px;
+}
+.copilot-ask:focus-within { border-color: var(--ice); }
+.copilot-ask input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: 13px Inter, sans-serif;
+  height: 32px;
+}
+.qa-card {
+  border: 1px solid #65d9ff33;
+  border-radius: 10px;
+  background: #65d9ff08;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+.qa-question { font-size: 12px; font-weight: 600; color: var(--ice); }
+.qa-card p { margin: 0; font-size: 13px; line-height: 1.5; color: #e2e8f0; }
+.qa-card ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #c8d3df; display: grid; gap: 3px; }
+.copilot-qa .panel-note .spin { vertical-align: -2px; margin-right: 6px; }

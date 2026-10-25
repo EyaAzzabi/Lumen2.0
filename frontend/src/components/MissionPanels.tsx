@@ -369,8 +369,8 @@ export function ExposurePanel() {
           {brief && (
             <>
               <span className="source-caption">
-                {brief.source === "claude"
-                  ? `Claude · ${brief.model}`
+                {brief.source !== "template"
+                  ? `${brief.source === "openai" ? "OpenAI" : "Claude"} · ${brief.model}`
                   : "Deterministic offline template"}{" "}
                 · backend figures
               </span>

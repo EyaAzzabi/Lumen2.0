@@ -5,7 +5,16 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { api, fmtKm, fmtMeur, fmtPct, RISK_COLOR, type Pt } from "../api";
+import {
+  api,
+  fmtKm,
+  fmtMeur,
+  fmtPct,
+  RISK_COLOR,
+  type CopilotAnswer,
+  type Pt,
+  type StructuredBrief,
+} from "../api";
 import { useMission, elevationAt } from "../mission";
 import { Icon } from "./Icon";
 import { Markdown, Term } from "../ui";
@@ -834,19 +843,10 @@ export function AnalysisWorkspace() {
                       : "Review the assessment before filing your proposal."}
                   </p>
                 </div>
-                <div className="copilot-prompts">
-                  <button
-                    onClick={() => {
-                      if (worst)
-                        useMission.getState().selectAsset(worst.asset_id);
-                    }}
-                  >
-                    Why is this asset affected?
-                  </button>
-                  <button onClick={() => void optimize()}>
-                    What can I change?
-                  </button>
-                </div>
+                <CopilotQA
+                  worstId={worst?.asset_id}
+                  worstName={worstAsset?.name}
+                />
                 <p>
                   Generate a mission briefing from the current numerical
                   assessment.
@@ -863,11 +863,15 @@ export function AnalysisWorkspace() {
                 {brief && (
                   <>
                     <span className="brief-source">
-                      {brief.source === "claude"
-                        ? `AI explanation (${brief.model}) · figures come from the physics engine`
+                      {brief.source !== "template"
+                        ? `AI explanation (${brief.source === "openai" ? "OpenAI" : "Claude"} ${brief.model}) · figures come from the physics engine`
                         : "Template explanation (offline) · figures come from the physics engine"}
                     </span>
-                    <Markdown text={brief.markdown} />
+                    {brief.structured ? (
+                      <BriefCards brief={brief.structured} />
+                    ) : (
+                      <Markdown text={brief.markdown} />
+                    )}
                   </>
                 )}
                 <p className="panel-note">
@@ -1302,5 +1306,134 @@ function LimitsBadge() {
     >
       Simplified model · not flight-certified
     </button>
+  );
+}
+
+function sourceLabel(a: { source: string; model?: string }) {
+  return a.source === "template"
+    ? "Offline answer from the assessment data"
+    : `AI answer (${a.source === "openai" ? "OpenAI" : "Claude"} ${a.model ?? ""}) · figures from the physics engine`;
+}
+
+/** Structured brief rendered as cards: situation, risks, actions, limitation. */
+function BriefCards({ brief }: { brief: StructuredBrief }) {
+  return (
+    <div className="brief-cards">
+      <section className="brief-card">
+        <h4>Situation</h4>
+        <p>{brief.situation}</p>
+      </section>
+      <section className="brief-card">
+        <h4>Risk drivers</h4>
+        {brief.risks.length ? (
+          brief.risks.map((r) => (
+            <div key={r.asset} className="brief-risk" style={{ "--severity": RISK_COLOR[r.risk] } as CSSProperties}>
+              <b>{r.asset}</b>
+              <span className="brief-risk-level">{r.risk}</span>
+              <p>{r.why}</p>
+            </div>
+          ))
+        ) : (
+          <p>No registered asset is at elevated or critical risk.</p>
+        )}
+      </section>
+      <section className="brief-card">
+        <h4>Recommended actions</h4>
+        <ol className="brief-actions">
+          {brief.actions.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ol>
+      </section>
+      {brief.limitations && <p className="brief-limit">{brief.limitations}</p>}
+    </div>
+  );
+}
+
+/** Grounded questions about the current draft (same data and guardrail as the brief). */
+function CopilotQA({ worstId, worstName }: { worstId?: string; worstName?: string }) {
+  const revision = useMission((s) => s.revision);
+  const [question, setQuestion] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [thread, setThread] = useState<{ q: string; a: CopilotAnswer }[]>([]);
+  // Answers describe one draft; a new draft starts a new conversation.
+  useEffect(() => setThread([]), [revision]);
+  async function ask(q: string, kind: "why" | "change" | "free", assetId?: string) {
+    const s = useMission.getState();
+    setPending(q);
+    setError("");
+    try {
+      const a = await api.ask(
+        s.lander,
+        s.optimization?.target.site ?? s.site,
+        s.optimization?.best?.site ?? null,
+        q,
+        kind,
+        assetId,
+      );
+      setThread((t) => [{ q, a }, ...t].slice(0, 4));
+      if (kind === "free") setQuestion("");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPending(null);
+    }
+  }
+  const why = worstName ? `Why is ${worstName} affected?` : "Why is this asset affected?";
+  return (
+    <div className="copilot-qa">
+      <div className="copilot-prompts">
+        <button disabled={!!pending || !worstId} onClick={() => void ask(why, "why", worstId)}>
+          {why}
+        </button>
+        <button disabled={!!pending} onClick={() => void ask("What can I change to reduce the risk?", "change")}>
+          What can I change?
+        </button>
+      </div>
+      <form
+        className="copilot-ask"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (question.trim().length >= 3) void ask(question.trim(), "free");
+        }}
+      >
+        <input
+          aria-label="Ask the copilot about this assessment"
+          maxLength={300}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask about this assessment…"
+          disabled={!!pending}
+        />
+        <button className="icon-button" aria-label="Ask" disabled={!!pending || question.trim().length < 3}>
+          <Icon name="ArrowRight" size={16} />
+        </button>
+      </form>
+      {pending && (
+        <p className="panel-note" role="status">
+          <span className="spin" /> Answering “{pending}” from the current assessment…
+        </p>
+      )}
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
+      {thread.map(({ q, a }, i) => (
+        <div key={i} className="qa-card">
+          <span className="qa-question">{q}</span>
+          <p>{a.answer}</p>
+          {a.points.length > 0 && (
+            <ul>
+              {a.points.map((p, j) => (
+                <li key={j}>{p}</li>
+              ))}
+            </ul>
+          )}
+          <span className="brief-source">{sourceLabel(a)}</span>
+        </div>
+      ))}
+    </div>
   );
 }
