@@ -12,6 +12,7 @@ import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./styles.css";
 import "./mission.css";
 import "./platform.css";
+import "./cinematic.css";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

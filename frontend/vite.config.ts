@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: { "/api": process.env.PLUME_API_TARGET || "http://127.0.0.1:8000" },
+    proxy: {
+      "/api": {
+        target: process.env.PLUME_API_TARGET || "http://127.0.0.1:8000",
+        changeOrigin: false,
+        xfwd: false,
+      },
+    },
   },
 });

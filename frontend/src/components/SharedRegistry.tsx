@@ -27,6 +27,8 @@ export function RegistryPanel() {
         (filter.region === "north" ? a.y >= 0 : a.y < 0)),
   );
   async function add() {
+    if (!useMission.getState().session?.permissions.includes("assets:write"))
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -145,7 +147,15 @@ export function RegistryPanel() {
           <span className="panel-subtitle">
             {visible.length} ASSETS IN VIEW
           </span>
-          <button className="action-text" onClick={() => setAdding(!adding)}>
+          <button
+            className="action-text"
+            disabled={
+              !useMission
+                .getState()
+                .session?.permissions.includes("assets:write")
+            }
+            onClick={() => setAdding(!adding)}
+          >
             <Icon name={adding ? "X" : "Plus"} size={14} />
             {adding ? "CLOSE" : "REGISTER"}
           </button>
@@ -429,16 +439,19 @@ export function RegistryDetail() {
               </p>
             )}
           </div>
-          {a.operator_id === acting && (
-            <div className="panel-section">
-              <button
-                className="outline-button danger full"
-                onClick={() => setConfirm(true)}
-              >
-                REMOVE OWNED DEMO ASSET
-              </button>
-            </div>
-          )}
+          {a.operator_id === acting &&
+            useMission
+              .getState()
+              .session?.permissions.includes("assets:write") && (
+              <div className="panel-section">
+                <button
+                  className="outline-button danger full"
+                  onClick={() => setConfirm(true)}
+                >
+                  REMOVE OWNED DEMO ASSET
+                </button>
+              </div>
+            )}
         </>
       ) : (
         <div className="panel-content registry-empty">

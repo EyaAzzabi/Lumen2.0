@@ -1,30 +1,174 @@
-"""PLUME HTTP API."""
+"""PLUME V2 HTTP API: explicit local identity, immutable revisions and provenance."""
+
 from __future__ import annotations
-
 from pathlib import Path
-from typing import Literal
-
-from fastapi import FastAPI, HTTPException
+from typing import Literal, Annotated
+from urllib.parse import unquote
+from datetime import datetime, timezone
+import json, logging, re, time, uuid, sqlite3
+from dataclasses import asdict
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Request,
+    Response as APIResponse,
+    Depends,
+    Query,
+    Header,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-
-from . import copilot, planner
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from . import copilot, planner, auth
+from .contracts import *
+from .budget import computation
+from .database import Conflict
 from .damage import ASSET_TYPES, RISK_BANDS
 from .physics import SIZE_CLASSES, Lander, max_range_m
 from .store import LANDER_PRESETS, Store
 from .terrain import HALF, RES_M, SIZE_M, Terrain
+from .provenance import provenance
 
-app = FastAPI(title="PLUME", version="1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
+settings = auth.Settings().validate()
+app = FastAPI(
+    title="PLUME",
+    version="2.0",
+    responses={
+        401: {"model": ErrorOut},
+        403: {"model": ErrorOut},
+        409: {"model": ErrorOut},
+        422: {"model": ErrorOut},
+        503: {"model": ErrorOut},
+    },
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "X-Plume-CSRF", "Idempotency-Key"],
+)
 terrain = Terrain()
 store = Store()
 _hillshade = terrain.hillshade_png()
+log = logging.getLogger("plume.api")
 
 
-class LanderIn(BaseModel):
+@app.middleware("http")
+async def request_boundary(request, call_next):
+    request.state.request_id = uuid.uuid4().hex
+    start = time.monotonic()
+    try:
+        length = request.headers.get("content-length")
+        if length and (not length.isdigit() or int(length) > 131072):
+            raise HTTPException(413, "Request body limit is 128 KiB")
+        if request.method in ("POST", "PATCH", "PUT"):
+            total = 0
+            chunks = []
+            async for chunk in request.stream():
+                total += len(chunk)
+                if total > 131072:
+                    raise HTTPException(413, "Request body limit is 128 KiB")
+                chunks.append(chunk)
+            request._body = b"".join(chunks)
+        response = await call_next(request)
+    except HTTPException as e:
+        response = JSONResponse(
+            {"detail": e.detail, "request_id": request.state.request_id},
+            status_code=e.status_code,
+        )
+    except Exception:
+        log.exception("request_failed id=%s", request.state.request_id)
+        response = JSONResponse(
+            {"detail": "Internal server error", "request_id": request.state.request_id},
+            status_code=500,
+        )
+    response.headers["X-Request-ID"] = request.state.request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    log.info(
+        "request id=%s method=%s status=%s duration_ms=%.1f",
+        request.state.request_id,
+        request.method,
+        response.status_code,
+        (time.monotonic() - start) * 1000,
+    )
+    return response
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request, exc):
+    return JSONResponse(
+        {"detail": exc.detail, "request_id": getattr(request.state, "request_id", "")},
+        status_code=exc.status_code,
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(sqlite3.Error)
+async def database_error(request, exc):
+    log.error("database_transaction_failed request_id=%s", request.state.request_id)
+    return JSONResponse(
+        {
+            "detail": "Registry transaction unavailable; retry safely with the same idempotency key",
+            "request_id": request.state.request_id,
+        },
+        status_code=503,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    return JSONResponse(
+        {
+            "detail": [
+                {"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]}
+                for e in exc.errors()
+            ],
+            "request_id": request.state.request_id,
+        },
+        status_code=422,
+    )
+
+
+@app.exception_handler(Conflict)
+async def conflict_error(request, exc):
+    return JSONResponse(
+        {"detail": str(exc), "request_id": request.state.request_id}, status_code=409
+    )
+
+
+def current_identity(request: Request):
+    return auth.identity(request, store, settings)
+
+
+IdentityDep = Annotated[auth.Identity, Depends(current_identity)]
+Key = Annotated[
+    str | None, Header(alias="Idempotency-Key", min_length=8, max_length=128)
+]
+
+
+def private_plan(plan_id, who):
+    who.require("private:read")
+    p = store.plan(plan_id)
+    if not p:
+        raise HTTPException(404, "Unknown plan")
+    if p["operator_id"] != who.organization_id and not any(
+        n["plan_id"] == plan_id for n in store.notices(who.organization_id)
+    ):
+        raise HTTPException(403, "Plan is private to consultation participants")
+    return p
+
+
+class Input(BaseModel):
+    model_config = ConfigDict(
+        allow_inf_nan=False, str_strip_whitespace=True, extra="forbid"
+    )
+
+
+class LanderIn(Input):
     label: str = "Custom lander"
     thrust_kn: float = Field(gt=0.5, le=5_000)
     hover_s: float = Field(gt=1, le=300)
@@ -34,12 +178,12 @@ class LanderIn(BaseModel):
         return Lander(self.thrust_kn, self.hover_s)
 
 
-class Point(BaseModel):
+class Point(Input):
     x: float = Field(ge=-HALF, le=HALF)
     y: float = Field(ge=-HALF, le=HALF)
 
 
-class SiteRequest(BaseModel):
+class SiteRequest(Input):
     lander: LanderIn
     site: Point
 
@@ -49,16 +193,19 @@ class OptimizeRequest(SiteRequest):
     traverse_meur_per_km: float = Field(2.0, ge=0, le=50)
     max_slope_deg: float = Field(8.0, ge=2, le=20)
     clearance_m: float = Field(300, ge=50, le=2_000)
+    dispersion_margin_sigma: float = Field(0, ge=0, le=3)
 
 
 class BriefRequest(SiteRequest):
     optimized_site: Point | None = None
 
 
-class AssetIn(BaseModel):
+class AssetIn(Input):
     operator_id: str
     name: str = Field(min_length=1, max_length=80)
-    type: Literal["habitat", "solar_array", "isru_plant", "comms_relay", "telescope", "rover"]
+    type: Literal[
+        "habitat", "solar_array", "isru_plant", "comms_relay", "telescope", "rover"
+    ]
     x: float = Field(ge=-HALF, le=HALF)
     y: float = Field(ge=-HALF, le=HALF)
     value_meur: float = Field(gt=0, le=10_000)
@@ -67,104 +214,261 @@ class AssetIn(BaseModel):
 class PlanIn(SiteRequest):
     operator_id: str
     name: str = Field(min_length=1, max_length=80)
-    window: str = Field(min_length=1, max_length=80)
+    window: str = Field("", max_length=200)
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    expected_revision: int | None = Field(None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_window(self):
+        if self.window_start is None and self.window_end is None:
+            m = re.fullmatch(
+                r"(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})[–-](\d{2}:\d{2}) UTC", self.window
+            )
+            if not m:
+                raise ValueError(
+                    "Use timezone-aware window_start and window_end; legacy text is read-only"
+                )
+            self.window_start = datetime.fromisoformat(m[1] + "T" + m[2] + ":00+00:00")
+            self.window_end = datetime.fromisoformat(m[1] + "T" + m[3] + ":00+00:00")
+        if (
+            self.window_start is None
+            or self.window_end is None
+            or self.window_start.tzinfo is None
+            or self.window_end.tzinfo is None
+        ):
+            raise ValueError("Both mission timestamps must include a timezone")
+        if (
+            not (
+                2000 <= self.window_start.year <= 2200
+                and 2000 <= self.window_end.year <= 2200
+            )
+            or self.window_end <= self.window_start
+        ):
+            raise ValueError(
+                "Invalid mission window; start must precede end within years 2000–2200"
+            )
+        self.window_start = self.window_start.astimezone(timezone.utc)
+        self.window_end = self.window_end.astimezone(timezone.utc)
+        self.window = (
+            self.window_start.isoformat() + " / " + self.window_end.isoformat()
+        )
+        return self
 
 
-class NoticeUpdate(BaseModel):
+class NoticeUpdate(Input):
     status: Literal["acknowledged", "objection"]
     reply: str | None = Field(None, max_length=1_000)
+    asset_ids: list[str] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def reason_required(self):
+        if self.status == "objection" and not self.reply:
+            raise ValueError("An objection requires a reason")
+        return self
 
 
-# --- reference data --------------------------------------------------------
-@app.get("/api/meta")
+class DemoSessionIn(Input):
+    operator_id: str
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "version": "2.0"}
+
+
+@app.get("/api/ready")
+def ready():
+    with store.connect() as c:
+        c.execute("SELECT 1").fetchone()
+    return {
+        "status": "ready",
+        "database": "sqlite",
+        "model_version": provenance(terrain)["model_version"],
+    }
+
+
+@app.get("/api/session", response_model=SessionOut)
+def session(request: Request):
+    if settings.demo:
+        auth.local_request(request)
+    try:
+        who = auth.identity(request, store, settings, csrf=False)
+    except HTTPException as e:
+        if e.status_code != 401:
+            raise
+        return {"authenticated": False, "demo_enabled": settings.demo}
+    with store.connect() as c:
+        row = c.execute(
+            "SELECT csrf FROM sessions WHERE id_hash=?",
+            (auth.digest(request.cookies[auth.COOKIE]),),
+        ).fetchone()
+    return {
+        "authenticated": True,
+        "demo_enabled": settings.demo,
+        "demo": who.demo,
+        "user_id": who.user_id,
+        "organization_id": who.organization_id,
+        "roles": list(who.roles),
+        "permissions": who.permissions,
+        "csrf_token": row[0],
+    }
+
+
+@app.post("/api/session/demo", response_model=SessionOut)
+def demo_session(body: DemoSessionIn, request: Request, response: APIResponse):
+    return auth.create_session(request, response, store, settings, body.operator_id)
+
+
+@app.delete("/api/session")
+def logout(request: Request, response: APIResponse, who: IdentityDep):
+    with store.transaction() as c:
+        c.execute(
+            "DELETE FROM sessions WHERE id_hash=?",
+            (auth.digest(request.cookies[auth.COOKIE]),),
+        )
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/meta", response_model=MetaOut)
 def meta():
     return {
-        "terrain": {"size_m": SIZE_M, "res_m": RES_M, "x_min": -HALF, "x_max": HALF, "y_min": -HALF, "y_max": HALF,
-                    "label": "Synthetic south-pole terrain (demo data)"},
-        "landers": [{**p, "max_range_m": max_range_m(Lander(p["thrust_kn"], p["hover_s"]))} for p in LANDER_PRESETS],
-        "asset_types": [{"key": t.key, "label": t.label, "default_height_m": t.default_height_m,
-                         "erosion_50": t.erosion_50, "impact_50": t.impact_50, "coating_50": t.coating_50}
-                        for t in ASSET_TYPES.values()],
+        "terrain": {
+            "size_m": SIZE_M,
+            "res_m": RES_M,
+            "x_min": -HALF,
+            "x_max": HALF,
+            "y_min": -HALF,
+            "y_max": HALF,
+            "label": "Synthetic south-pole terrain (demo data)",
+        },
+        "landers": [
+            {**p, "max_range_m": max_range_m(Lander(p["thrust_kn"], p["hover_s"]))}
+            for p in LANDER_PRESETS
+        ],
+        "asset_types": [
+            {
+                **asdict(t),
+                "erosion_50": t.erosion_50,
+                "impact_50": t.impact_50,
+                "coating_50": t.coating_50,
+                "legacy_alias_semantics": "deprecated characteristic scales, not 50% thresholds",
+            }
+            for t in ASSET_TYPES.values()
+        ],
         "risk_bands": [{"below": b, "name": n} for b, n in RISK_BANDS],
-        "size_classes": [c.__dict__ for c in SIZE_CLASSES],
+        "size_classes": [asdict(c) for c in SIZE_CLASSES],
+        "provenance": provenance(terrain),
     }
 
 
 @app.get("/api/terrain/hillshade.png")
 def hillshade():
-    return Response(_hillshade, media_type="image/png", headers={"Cache-Control": "max-age=3600"})
+    return Response(
+        _hillshade, media_type="image/png", headers={"Cache-Control": "max-age=3600"}
+    )
 
 
-@app.get("/api/terrain/point")
-def terrain_point(x: float, y: float):
-    return {"x": x, "y": y, "elevation_m": float(terrain.elevation(x, y)), "slope_deg": float(terrain.slope_deg(x, y))}
+@app.get("/api/terrain/point", response_model=TerrainPointOut)
+def terrain_point(
+    x: Annotated[float, Query(ge=-HALF, le=HALF, allow_inf_nan=False)],
+    y: Annotated[float, Query(ge=-HALF, le=HALF, allow_inf_nan=False)],
+):
+    return {
+        "x": x,
+        "y": y,
+        "elevation_m": float(terrain.elevation(x, y)),
+        "slope_deg": float(terrain.slope_deg(x, y)),
+    }
 
 
-@app.get("/api/terrain/mesh")
+@app.get("/api/terrain/mesh", response_model=TerrainMeshOut)
 def terrain_mesh():
-    """Read-only visualization grid sampled from the actual simulation terrain.
-
-    Rows run south to north, columns west to east. No visual-only elevation
-    generation or changes to the simulation's native 50 m terrain are involved.
-    """
     import numpy as np
 
     n = 201
     axis = np.linspace(-HALF, HALF, n)
     x, y = np.meshgrid(axis, axis)
-    return {"n": n, "size_m": SIZE_M, "x_min": -HALF, "y_min": -HALF,
-            "step_m": SIZE_M / (n - 1), "label": "Synthetic south-pole terrain (demo data)",
-            "elevations_m": np.round(terrain.elevation(x, y), 2).ravel().tolist()}
+    return {
+        "n": n,
+        "size_m": SIZE_M,
+        "x_min": -HALF,
+        "y_min": -HALF,
+        "step_m": SIZE_M / (n - 1),
+        "label": "Synthetic south-pole terrain (demo data)",
+        "elevations_m": np.round(terrain.elevation(x, y), 2).ravel().tolist(),
+        "provenance": provenance(terrain)["terrain"],
+    }
 
 
-# --- registry --------------------------------------------------------------
-@app.get("/api/operators")
+@app.get("/api/operators", response_model=list[OrganizationOut])
 def operators():
     return store.operators()
 
 
-@app.get("/api/assets")
+@app.get("/api/assets", response_model=list[AssetOut])
 def assets():
     return store.assets()
 
 
-@app.post("/api/assets")
-def add_asset(body: AssetIn):
-    if not store.operator(body.operator_id):
-        raise HTTPException(404, "Unknown operator")
-    return store.add_asset(body.model_dump())
+@app.post("/api/assets", response_model=AssetOut)
+def add_asset(body: AssetIn, who: IdentityDep):
+    who.require("assets:write", body.operator_id)
+    if len(store.assets()) >= 200:
+        raise HTTPException(
+            409, "Local computation registry limit is 200 active assets"
+        )
+    return store.add_asset(body.model_dump(), who.user_id)
 
 
 @app.delete("/api/assets/{asset_id}")
-def delete_asset(asset_id: str):
-    if not store.delete_asset(asset_id):
+def delete_asset(asset_id: str, who: IdentityDep):
+    a = store.asset(asset_id)
+    if not a:
         raise HTTPException(404, "Unknown asset")
+    who.require("assets:write", a["operator_id"])
+    store.delete_asset(asset_id, who.user_id)
     return {"ok": True}
 
 
-@app.post("/api/reset")
-def reset():
-    store.reset()
-    return {"ok": True}
-
-
-# --- analysis --------------------------------------------------------------
-@app.post("/api/assess")
+@app.post("/api/assess", response_model=AssessmentOut)
 def assess(body: SiteRequest):
-    return planner.assess(terrain, body.lander.physics(), body.lander.dispersion_m, body.site.x, body.site.y,
-                          store.assets())
+    with computation():
+        return planner.assess(
+            terrain,
+            body.lander.physics(),
+            body.lander.dispersion_m,
+            body.site.x,
+            body.site.y,
+            store.assets(),
+        )
 
 
-@app.post("/api/footprint")
+@app.post("/api/footprint", response_model=FootprintOut)
 def footprint(body: SiteRequest):
-    return planner.footprint(terrain, body.lander.physics(), body.site.x, body.site.y)
+    with computation():
+        return planner.footprint(
+            terrain, body.lander.physics(), body.site.x, body.site.y
+        )
 
 
-@app.post("/api/optimize")
+@app.post("/api/optimize", response_model=OptimizationOut)
 def optimize(body: OptimizeRequest):
-    return planner.optimize(terrain, body.lander.physics(), body.lander.dispersion_m, body.site.x, body.site.y,
-                            store.assets(), body.search_radius_m, body.traverse_meur_per_km, body.max_slope_deg,
-                            body.clearance_m)
+    with computation():
+        return planner.optimize(
+            terrain,
+            body.lander.physics(),
+            body.lander.dispersion_m,
+            body.site.x,
+            body.site.y,
+            store.assets(),
+            body.search_radius_m,
+            body.traverse_meur_per_km,
+            body.max_slope_deg,
+            body.clearance_m,
+            dispersion_margin_sigma=body.dispersion_margin_sigma,
+        )
 
 
 @app.get("/api/curves")
@@ -182,73 +486,334 @@ def curves():
         lander = Lander(p["thrust_kn"], p["hover_s"])
         series = {}
         for t in ASSET_TYPES.values():
-            flu = exposure(lander, xs, np.zeros_like(xs), np.zeros_like(d), d, t.default_height_m)
+            flu = exposure(
+                lander, xs, np.zeros_like(xs), np.zeros_like(d), d, t.default_height_m
+            )
             series[t.key] = np.round(damage_fraction(t, flu)["total"], 6).tolist()
-        out.append({"lander": p["id"], "label": p["label"], "eroded_mass_kg": lander.eroded_mass_kg,
-                    "damage": series})
+        out.append(
+            {
+                "lander": p["id"],
+                "label": p["label"],
+                "eroded_mass_kg": lander.eroded_mass_kg,
+                "damage": series,
+            }
+        )
     # Historical check: Apollo 12 descent vs Surveyor 3 at ~160 m.
     apollo = Lander(15, 60)
     s_xs = np.linspace(0.02, 0.97, 40)[None, :] * 160
-    s_flu = exposure(apollo, s_xs, np.zeros_like(s_xs), np.zeros(1), np.array([160.0]), 1.5)
-    return {"distance_m": d.round(1).tolist(), "series": out,
-            "surveyor_check": {"distance_m": 160, "energy_fluence_j_m2": float(s_flu["energy_total"][0]),
-                               "fine_mass_g_m2": float((s_flu["mass_dust"] + s_flu["mass_sand"])[0] * 1000)}}
+    s_flu = exposure(
+        apollo, s_xs, np.zeros_like(s_xs), np.zeros(1), np.array([160.0]), 1.5
+    )
+    return {
+        "distance_m": d.round(1).tolist(),
+        "series": out,
+        "surveyor_check": {
+            "distance_m": 160,
+            "energy_fluence_j_m2": float(s_flu["energy_total"][0]),
+            "fine_mass_g_m2": float(
+                (s_flu["mass_dust"] + s_flu["mass_sand"])[0] * 1000
+            ),
+        },
+    }
 
 
-@app.post("/api/copilot/brief")
+@app.post("/api/copilot/brief", response_model=BriefOut)
 def brief(body: BriefRequest):
-    assets_ = store.assets()
-    lander = body.lander.physics()
-    base = planner.assess(terrain, lander, body.lander.dispersion_m, body.site.x, body.site.y, assets_)
-    opt = None
-    if body.optimized_site:
-        opt = planner.assess(terrain, lander, body.lander.dispersion_m, body.optimized_site.x, body.optimized_site.y,
-                             assets_)
-    return copilot.brief(body.lander.model_dump(), base, assets_, store.operators(), opt)
+    a = store.assets()
+    with computation():
+        base = planner.assess(
+            terrain,
+            body.lander.physics(),
+            body.lander.dispersion_m,
+            body.site.x,
+            body.site.y,
+            a,
+        )
+        opt = (
+            planner.assess(
+                terrain,
+                body.lander.physics(),
+                body.lander.dispersion_m,
+                body.optimized_site.x,
+                body.optimized_site.y,
+                a,
+            )
+            if body.optimized_site
+            else None
+        )
+    result = copilot.brief(body.lander.model_dump(), base, a, store.operators(), opt)
+    return {
+        **result,
+        "structured_assessment": base,
+        "narrative_is_safety_certification": False,
+    }
 
 
-# --- landing plans & notices -----------------------------------------------
-@app.get("/api/plans")
-def plans():
-    return store.plans()
+@app.get("/api/plans", response_model=list[PlanOut])
+def plans(who: IdentityDep):
+    who.require("private:read")
+    visible = {n["plan_id"] for n in store.notices(who.organization_id)}
+    return [
+        p
+        for p in store.plans()
+        if p["operator_id"] == who.organization_id or p["id"] in visible
+    ]
 
 
-@app.post("/api/plans")
-def submit_plan(body: PlanIn):
-    if not store.operator(body.operator_id):
-        raise HTTPException(404, "Unknown operator")
-    assets_ = store.assets()
-    result = planner.assess(terrain, body.lander.physics(), body.lander.dispersion_m, body.site.x, body.site.y, assets_)
+def file_plan(body, who, key, plan_id=None):
+    who.require("plans:write", body.operator_id)
+    if not key:
+        raise HTTPException(400, "Idempotency-Key required")
+    if plan_id:
+        old = private_plan(plan_id, who)
+        who.require("plans:write", old["operator_id"])
+    a = store.assets()
+    with computation():
+        result = planner.assess(
+            terrain,
+            body.lander.physics(),
+            body.lander.dispersion_m,
+            body.site.x,
+            body.site.y,
+            a,
+        )
     plan = {
-        "operator_id": body.operator_id, "name": body.name, "window": body.window,
-        "lander": body.lander.model_dump(), "site": body.site.model_dump(),
+        "operator_id": body.operator_id,
+        "name": body.name,
+        "window": body.window,
+        "window_start": body.window_start.isoformat(),
+        "window_end": body.window_end.isoformat(),
+        "lander": body.lander.model_dump(),
+        "site": body.site.model_dump(),
         "summary": result["summary"],
     }
-    notices = copilot.notices_for_plan(plan, result, assets_, store.operators())
-    plan["status"] = "consultation" if notices else "cleared"
-    saved = store.add_plan(plan, notices)
-    return {"plan": saved, "notices_sent": len(notices)}
+    previous = (
+        {n["to_operator_id"] for n in store.notices() if n["plan_id"] == plan_id}
+        if plan_id
+        else set()
+    )
+    accessible_ids = {n["plan_id"] for n in store.notices(who.organization_id)}
+    overlap = []
+    for other in store.plans():
+        if (
+            other["id"] == plan_id
+            or other["status"] == "withdrawn"
+            or (
+                other["operator_id"] != who.organization_id
+                and other["id"] not in accessible_ids
+            )
+        ):
+            continue
+        if other.get("window_start") and other.get("window_end"):
+            if body.window_start < datetime.fromisoformat(
+                other["window_end"]
+            ) and body.window_end > datetime.fromisoformat(other["window_start"]):
+                overlap.append(other["id"])
+    plan["temporal_conflicts"] = {
+        "overlapping_visible_plan_ids": overlap,
+        "scope": "own plans and existing consultation participants",
+        "physically_modeled_interaction": False,
+        "legacy_free_text_windows": "not comparable",
+    }
+    notices = copilot.notices_for_plan(plan, result, a, store.operators(), previous)
+    snapshot = {
+        "assessment": result,
+        "inputs": body.model_dump(mode="json"),
+        "assets": a,
+        "provenance": provenance(terrain),
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+        "random_seed": 0,
+        "sample_count": 48,
+    }
+    saved = store.file_revision(
+        plan,
+        notices,
+        snapshot,
+        who.user_id,
+        plan_id,
+        key,
+        body.expected_revision,
+        body.model_dump(mode="json"),
+    )
+    created = [
+        n for n in store.notices() if n.get("revision_id") == saved["revision_id"]
+    ]
+    return {"plan": saved, "notices_sent": len(created)}
 
 
-@app.get("/api/notices")
-def notices(operator_id: str | None = None):
-    return store.notices(operator_id)
+@app.post("/api/plans", response_model=FiledOut)
+def submit_plan(body: PlanIn, who: IdentityDep, idempotency_key: Key = None):
+    return file_plan(body, who, idempotency_key)
 
 
-@app.patch("/api/notices/{notice_id}")
-def update_notice(notice_id: str, body: NoticeUpdate):
-    n = store.set_notice_status(notice_id, body.status, body.reply)
+@app.post("/api/plans/{plan_id}/revisions", response_model=FiledOut)
+def revise_plan(
+    plan_id: str, body: PlanIn, who: IdentityDep, idempotency_key: Key = None
+):
+    return file_plan(body, who, idempotency_key, plan_id)
+
+
+@app.get("/api/plans/{plan_id}", response_model=DetailOut)
+def plan_detail(plan_id: str, who: IdentityDep):
+    p = private_plan(plan_id, who)
+    rows = store.revisions(plan_id)
+    notices = [n for n in store.notices(who.organization_id) if n["plan_id"] == plan_id]
+    for notice in notices:
+        notice["response_history"] = store.responses(notice["id"])
+    for row in rows:
+        row["historical_assessment"] = store.assessment(row["revision_id"])
+        row["immutable_inputs"] = True
+    return {
+        "plan": p,
+        "revisions": rows,
+        "events": [
+            {k: v for k, v in e.items() if k != "payload"}
+            for e in store.events(plan_id)
+        ],
+        "notices": notices,
+        "coordination": {
+            "status": p["status"],
+            "current_revision": p.get("revision", 1),
+            "rule": "all required recipients must acknowledge the current revision; earlier objections retained",
+            "safety_certification": False,
+        },
+    }
+
+
+@app.get("/api/plans/{plan_id}/events", response_model=list[EventOut])
+def plan_events(plan_id: str, who: IdentityDep):
+    private_plan(plan_id, who)
+    return [
+        {k: v for k, v in e.items() if k != "payload"} for e in store.events(plan_id)
+    ]
+
+
+@app.post("/api/plans/{plan_id}/reassess", response_model=AssessmentOut)
+def reassess(plan_id: str, who: IdentityDep):
+    p = private_plan(plan_id, who)
+    who.require("plans:write", p["operator_id"])
+    body = SiteRequest(lander=p["lander"], site=p["site"])
+    result = assess(body)
+    with store.transaction() as c:
+        store.event(
+            c,
+            "CURRENT_REGISTRY_REASSESSED",
+            who.user_id,
+            who.organization_id,
+            plan_id,
+            p.get("revision_id"),
+            {"summary": result["summary"], "historical_snapshot_unchanged": True},
+        )
+    return result
+
+
+@app.post("/api/plans/{plan_id}/withdraw", response_model=PlanOut)
+def withdraw(plan_id: str, who: IdentityDep):
+    p = private_plan(plan_id, who)
+    who.require("plans:write", p["operator_id"])
+    return store.withdraw(plan_id, who.user_id, who.organization_id)
+
+
+@app.get("/api/notices", response_model=list[NoticeOut])
+def notices(who: IdentityDep, operator_id: str | None = None):
+    who.require("private:read", operator_id or who.organization_id)
+    return store.notices(who.organization_id)
+
+
+def accessible_notice(notice_id, who, respond=False):
+    n = store.notice(notice_id)
     if not n:
         raise HTTPException(404, "Unknown notice")
+    if respond:
+        who.require("notices:respond", n["to_operator_id"])
+    elif who.organization_id not in (n["from_operator_id"], n["to_operator_id"]):
+        raise HTTPException(403, "Consultation participant required")
     return n
 
 
-# --- built frontend (production / demo mode) -------------------------------
+@app.patch("/api/notices/{notice_id}", response_model=NoticeOut)
+def update_notice(
+    notice_id: str, body: NoticeUpdate, who: IdentityDep, idempotency_key: Key = None
+):
+    notice = accessible_notice(notice_id, who, True)
+    if body.status == "objection" and not body.asset_ids:
+        body.asset_ids = notice["asset_ids"]
+    if not idempotency_key:
+        raise HTTPException(400, "Idempotency-Key required")
+    return store.respond(
+        notice_id,
+        body.status,
+        body.reply,
+        body.asset_ids,
+        who.user_id,
+        who.organization_id,
+        idempotency_key,
+    )
+
+
+@app.post("/api/notices/{notice_id}/read", response_model=NoticeOut)
+def read_notice(notice_id: str, who: IdentityDep):
+    n = accessible_notice(notice_id, who)
+    who.require("private:read", n["to_operator_id"])
+    return store.mark_read(notice_id, who.user_id, who.organization_id)
+
+
+@app.get("/api/notices/{notice_id}/responses")
+def notice_responses(notice_id: str, who: IdentityDep):
+    accessible_notice(notice_id, who)
+    return store.responses(notice_id)
+
+
+@app.get("/api/inbox/counts")
+def inbox_counts(who: IdentityDep):
+    rows = [
+        n
+        for n in store.notices(who.organization_id)
+        if n["to_operator_id"] == who.organization_id
+    ]
+    return {
+        "unread": sum(
+            n.get("read_at") is None and n["status"] == "unread" for n in rows
+        ),
+        "awaiting_response": sum(n["status"] == "unread" for n in rows),
+        "total": len(rows),
+    }
+
+
+@app.api_route(
+    "/api/{unknown_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    include_in_schema=False,
+)
+def unknown_api(unknown_path: str):
+    raise HTTPException(404, "API route not found")
+
+
+# StaticFiles handles file serving after an explicit normalized containment check.
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="static")
+    static = StaticFiles(directory=DIST, html=True, follow_symlink=False)
 
-    @app.get("/{path:path}")
-    def spa(path: str):
-        f = DIST / path
-        return FileResponse(f if path and f.is_file() else DIST / "index.html")
+    @app.get("/{path:path}", include_in_schema=False)
+    async def spa(path: str, request: Request):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "API route not found")
+        decoded = path
+        for _ in range(8):
+            decoded = unquote(decoded)
+        if decoded == "api" or decoded.startswith("api/"):
+            raise HTTPException(404, "API route not found")
+        parts = decoded.replace("\\", "/").split("/")
+        f = (DIST / decoded).resolve()
+        if (
+            any(p.startswith(".") for p in parts if p)
+            or "\\" in decoded
+            or ":" in decoded
+            or decoded.startswith("/")
+            or not f.is_relative_to(DIST.resolve())
+        ):
+            raise HTTPException(404, "Not found")
+        return await static.get_response(
+            decoded if f.is_file() else "index.html", request.scope
+        )

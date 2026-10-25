@@ -31,6 +31,13 @@ import type { TerrainMesh } from "../api";
 import { RISK_COLOR } from "../api";
 import MapView from "../MapView";
 import { InfrastructureModel, LanderModel } from "./Models";
+import {
+  DistantEarth,
+  InspectionPad,
+  LandingLocator,
+  OwnershipLinks,
+  RegolithRocks,
+} from "./Environment";
 
 function random(seed = 23) {
   return () => {
@@ -186,6 +193,7 @@ function TerrainSurface() {
   const terrain = useMission((s) => s.terrain)!;
   const low = useMission((s) => s.lowGraphics),
     visible = useMission((s) => s.layers.terrain);
+  const style = useMission((s) => s.sceneStyle);
   const geometry = useMemo(() => terrainGeometry(terrain, low), [terrain, low]);
   const texture = useMemo(regolithTexture, []);
   const hillshade = useTexture("/api/terrain/hillshade.png");
@@ -218,11 +226,12 @@ function TerrainSurface() {
       <meshStandardMaterial
         map={hillshade}
         bumpMap={texture}
-        bumpScale={0.018}
-        color="#d0cfce"
+        bumpScale={0.035}
+        color={style === "heatmap" ? "#707b8a" : "#eeeef0"}
         roughness={0.98}
         metalness={0.05}
-        wireframe={false}
+        wireframe={style === "wireframe"}
+        flatShading={false}
       />
     </mesh>
   );
@@ -261,7 +270,9 @@ function FootprintOverlay() {
         data[k + 1] = color.g * 255;
         data[k + 2] = color.b * 255;
         data[k + 3] =
-          v < 0.0005 ? 0 : Math.min(210, 55 + Math.log10(1 + v * 1000) * 48);
+          footprint.valid_mask?.[j * n + i] === false || v < 0.0005
+            ? 0
+            : Math.min(210, 55 + Math.log10(1 + v * 1000) * 48);
       }
     for (let j = 0; j < n - 1; j++)
       for (let i = 0; i < n - 1; i++) {
@@ -358,7 +369,9 @@ function Infrastructure() {
                   document.body.style.cursor = "";
                 }}
               >
-                <InfrastructureModel type={a.type} />
+                <group scale={1.55}>
+                  <InfrastructureModel type={a.type} />
+                </group>
                 <mesh visible={false}>
                   <sphereGeometry args={[0.35, 8, 8]} />
                   <meshBasicMaterial />
@@ -384,7 +397,7 @@ function Infrastructure() {
                 />
               </mesh>
               <Html
-                position={[0, 0.5, 0]}
+                position={[0, 0.82, 0]}
                 center
                 zIndexRange={[20, 0]}
                 style={{ pointerEvents: "none" }}
@@ -427,12 +440,14 @@ function LandingSite() {
     group = useRef<Group>(null),
     exhaust = useRef<Group>(null);
   const h = elevationAt(terrain, site.x, site.y);
-  useFrame(() => {
+  useFrame((_, delta) => {
     const s = useMission.getState(),
       isReplay = s.mode === "simulation" || s.mode === "replay";
     if (group.current)
       group.current.position.y =
         h + (isReplay ? Math.max(0, 1 - s.replay / 12) * 2 : 0);
+    if (group.current && s.mode === "setup" && !s.reducedMotion)
+      group.current.rotation.y += delta * 0.1;
     if (exhaust.current)
       exhaust.current.visible = isReplay && s.replay >= 4 && s.replay < 14;
   });
@@ -441,7 +456,7 @@ function LandingSite() {
       <group
         ref={group}
         position={[0, h, 0]}
-        scale={mode === "setup" ? 1.5 : 1}
+        scale={mode === "setup" ? 1.5 : 1.65}
       >
         <LanderModel />
         <group ref={exhaust} position={[0, -0.1, 0]} visible={false}>
@@ -476,7 +491,7 @@ function LandingSite() {
         </group>
       )}
       {mode !== "setup" && (
-        <Html position={[0, h + 0.85, 0]} center zIndexRange={[25, 0]}>
+        <Html position={[0, h + 1.25, 0]} center zIndexRange={[25, 0]}>
           <div className="site-label">
             <span />
             PROPOSED TOUCHDOWN
@@ -690,6 +705,7 @@ function CameraRig() {
   const mode = useMission((s) => s.mode),
     view = useMission((s) => s.cameraView),
     tick = useMission((s) => s.cameraTick);
+  const viewpoint = useMission((s) => s.viewpoint);
   const destination = useRef({
     position: new Vector3(0, 1, 11),
     target: new Vector3(0, 0, 0),
@@ -708,8 +724,16 @@ function CameraRig() {
       target = new Vector3(0.5, 0, 0);
       offset = new Vector3(0, 0.5, 11);
     } else if (view === "overview") {
-      target = new Vector3(0, 0.15, 0.4);
-      offset = new Vector3(10, 10, 13);
+      if (viewpoint === "crater") {
+        target = new Vector3(-7.7, -0.6, 5.8);
+        offset = new Vector3(6, 3.6, 8);
+      } else if (viewpoint === "ridge") {
+        target = new Vector3(-0.5, 0.3, -1.5);
+        offset = new Vector3(6.5, 3.8, 7);
+      } else {
+        target = new Vector3(0, 0.15, 0.7);
+        offset = new Vector3(8, 3.2, 10);
+      }
     } else if (view === "top") offset = new Vector3(0, 18, 0.01);
     else if (view === "lander") {
       target.y += 0.4;
@@ -734,7 +758,7 @@ function CameraRig() {
       controls.current?.update();
       destination.current.moving = false;
     }
-  }, [mode, view, tick, camera]);
+  }, [mode, view, tick, camera, viewpoint]);
   useFrame((_, delta) => {
     const d = destination.current;
     if (d.moving && controls.current) {
@@ -745,6 +769,18 @@ function CameraRig() {
       if (camera.position.distanceTo(d.position) < 0.007) d.moving = false;
     }
     const s = useMission.getState();
+    if (
+      s.tour &&
+      !s.reducedMotion &&
+      !d.moving &&
+      controls.current &&
+      ["operations", "optimizer", "registry"].includes(s.mode)
+    ) {
+      const offset = camera.position.clone().sub(controls.current.target);
+      offset.applyAxisAngle(new Vector3(0, 1, 0), Math.min(delta, 0.1) * 0.035);
+      camera.position.copy(controls.current.target).add(offset);
+      controls.current.update();
+    }
     if (s.playing) {
       const replay = Math.min(
         REPLAY_DURATION,
@@ -765,24 +801,34 @@ function CameraRig() {
       enabled={!["gateway", "login", "pricing"].includes(mode)}
       onStart={() => {
         destination.current.moving = false;
+        useMission.setState({ tour: false });
       }}
     />
   );
 }
 
 function World() {
+  const { scene, gl } = useThree();
   const mode = useMission((s) => s.mode),
     terrain = useMission((s) => s.terrain),
     low = useMission((s) => s.lowGraphics);
   const orbital = ["gateway", "login", "pricing"].includes(mode);
+  const inspection = mode === "setup";
+  useEffect(() => {
+    scene.background = inspection ? null : new Color("#02060c");
+    gl.setClearColor("#02060c", inspection ? 0 : 1);
+  }, [inspection, scene, gl]);
   return (
     <>
-      <color attach="background" args={["#050a12"]} />
-      <fog attach="fog" args={["#050a12", 30, 85]} />
-      <ambientLight intensity={orbital ? 0.045 : 0.38} color="#9aabc2" />
+      {!inspection && <color attach="background" args={["#02060c"]} />}
+      {!inspection && <fog attach="fog" args={["#040910", 30, 85]} />}
+      <ambientLight
+        intensity={orbital ? 0.045 : inspection ? 0.38 : 0.4}
+        color="#9aabc2"
+      />
       <directionalLight
-        position={[-14, 9, -9]}
-        intensity={orbital ? 0.6 : 3.1}
+        position={[8, 5, 10]}
+        intensity={orbital ? 0.6 : 3.5}
         color="#f6eddf"
         castShadow={!low && !orbital}
         shadow-mapSize={low ? [512, 512] : [2048, 2048]}
@@ -813,7 +859,15 @@ function World() {
       ) : (
         terrain && (
           <group>
-            <TerrainSurface />
+            {inspection ? (
+              <InspectionPad />
+            ) : (
+              <>
+                <TerrainSurface />
+                <RegolithRocks />
+                <DistantEarth />
+              </>
+            )}
             {mode !== "setup" && (
               <>
                 <FootprintOverlay />
@@ -821,6 +875,12 @@ function World() {
               </>
             )}
             <LandingSite />
+            {!inspection && (
+              <>
+                <LandingLocator />
+                <OwnershipLinks />
+              </>
+            )}
             {mode !== "setup" && <Candidates />}
             <Ejecta />
             <RegisteredPlans />
@@ -973,6 +1033,7 @@ export default function LunarScene() {
         }
       >
         <Canvas
+          frameloop={mode === "gateway" ? "demand" : "always"}
           shadows={!low}
           dpr={low ? 1 : [1, 1.6]}
           camera={{ position: [0, 1, 11], fov: 43, near: 0.02, far: 180 }}

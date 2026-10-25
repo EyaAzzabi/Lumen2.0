@@ -353,15 +353,17 @@ export function Login() {
           className="action-primary full"
           disabled={!connected}
           onClick={() => {
-            useMission.getState().switchOperator(selected);
-            useMission.getState().setMode("operations");
+            void useMission
+              .getState()
+              .switchOperator(selected)
+              .then(() => useMission.getState().setMode("operations"));
           }}
         >
           ENTER DEMO WORKSPACE <Icon name="ArrowRight" size={16} />
         </button>
         <p className="login-disclosure">
-          Demo context switching only. No password validation, authentication
-          tokens or secure organization boundaries.
+          Local demo session only. Server checks ownership and permissions; this
+          is not production SSO.
         </p>
       </section>
     </div>

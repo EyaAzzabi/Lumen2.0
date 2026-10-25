@@ -5,6 +5,7 @@ polar crater, a connecting ridge where operators cluster for sunlight, smaller
 craters and fractal roughness. Coordinates are local metres, origin at the map
 centre, x pointing east and y pointing north.
 """
+
 from __future__ import annotations
 
 import io
@@ -23,7 +24,9 @@ def _fractal_noise(rng: np.random.Generator, n: int, beta: float = 3.3) -> np.nd
     fx, fy = np.meshgrid(freqs, freqs)
     f = np.hypot(fx, fy)
     f[0, 0] = 1.0
-    spectrum = (rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))) / f ** (beta / 2)
+    spectrum = (rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))) / f ** (
+        beta / 2
+    )
     spectrum[0, 0] = 0
     noise = np.real(np.fft.ifft2(spectrum))
     return noise / noise.std()
@@ -32,7 +35,7 @@ def _fractal_noise(rng: np.random.Generator, n: int, beta: float = 3.3) -> np.nd
 def _crater(X, Y, cx, cy, r, depth, rim):
     d = np.hypot(X - cx, Y - cy) / r
     bowl = np.where(d < 1, -depth * (1 - d**2) + rim, 0.0)
-    outside = np.where(d >= 1, rim * np.exp(-((d - 1) / 0.35) ** 2), 0.0)
+    outside = np.where(d >= 1, rim * np.exp(-(((d - 1) / 0.35) ** 2)), 0.0)
     return bowl + outside
 
 
@@ -46,9 +49,9 @@ def generate(seed: int = 7) -> np.ndarray:
     z += _crater(X, Y, -8_500, -6_500, 7_000, 2_100, 320)
     # Connecting ridge running north-east from the crater rim: the sunlit
     # high ground where everyone wants to build.
-    t = ((X + 2_000) * 0.7 + (Y + 1_000) * 0.7)
-    s = (-(X + 2_000) * 0.7 + (Y + 1_000) * 0.7)
-    z += 380 * np.exp(-(s / 2_600) ** 2) * np.exp(-((t - 3_000) / 9_000) ** 2)
+    t = (X + 2_000) * 0.7 + (Y + 1_000) * 0.7
+    s = -(X + 2_000) * 0.7 + (Y + 1_000) * 0.7
+    z += 380 * np.exp(-((s / 2_600) ** 2)) * np.exp(-(((t - 3_000) / 9_000) ** 2))
     # Scattered secondary craters.
     for _ in range(60):
         cx, cy = rng.uniform(-HALF, HALF, 2)
@@ -59,6 +62,7 @@ def generate(seed: int = 7) -> np.ndarray:
 
 class Terrain:
     def __init__(self, seed: int = 7):
+        self.seed = seed
         self.z = generate(seed)
 
     def elevation(self, x, y):
@@ -81,8 +85,12 @@ class Terrain:
 
     def slope_deg(self, x, y):
         h = RES_M
-        dzdx = (self.elevation(np.add(x, h), y) - self.elevation(np.subtract(x, h), y)) / (2 * h)
-        dzdy = (self.elevation(x, np.add(y, h)) - self.elevation(x, np.subtract(y, h))) / (2 * h)
+        dzdx = (
+            self.elevation(np.add(x, h), y) - self.elevation(np.subtract(x, h), y)
+        ) / (2 * h)
+        dzdy = (
+            self.elevation(x, np.add(y, h)) - self.elevation(x, np.subtract(y, h))
+        ) / (2 * h)
         return np.degrees(np.arctan(np.hypot(dzdx, dzdy)))
 
     def profiles(self, x0, y0, x1, y1, k: int = 40):
@@ -92,7 +100,9 @@ class Terrain:
         relative to the launch point (P, k), target base height relative to the
         launch point (P,), and path length (P,).
         """
-        x0, y0, x1, y1 = (np.atleast_1d(np.asarray(a, dtype=np.float64)) for a in (x0, y0, x1, y1))
+        x0, y0, x1, y1 = (
+            np.atleast_1d(np.asarray(a, dtype=np.float64)) for a in (x0, y0, x1, y1)
+        )
         x0, y0, x1, y1 = np.broadcast_arrays(x0, y0, x1, y1)
         d = np.hypot(x1 - x0, y1 - y0)
         z0 = self.elevation(x0, y0)
@@ -110,7 +120,9 @@ class Terrain:
         az, alt = np.radians(45), np.radians(25)
         slope = np.arctan(np.hypot(gx, gy))
         aspect = np.arctan2(-gx, gy)
-        shade = np.sin(alt) * np.cos(slope) + np.cos(alt) * np.sin(slope) * np.cos(az - aspect)
+        shade = np.sin(alt) * np.cos(slope) + np.cos(alt) * np.sin(slope) * np.cos(
+            az - aspect
+        )
         shade = np.clip(shade, 0, 1)
         elev = (z - z.min()) / (z.max() - z.min())
         v = 0.18 + 0.62 * shade * (0.55 + 0.45 * elev)

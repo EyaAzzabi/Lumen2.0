@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 const output = "artifacts";
+test.beforeEach(async ({ request }) => {
+  const r = await request.post("/api/session/demo", {
+    data: { operator_id: "kestrel" },
+  });
+  expect(r.ok()).toBeTruthy();
+});
 test.beforeAll(async () => {
   await mkdir(output, { recursive: true });
 });
@@ -174,7 +180,7 @@ test("two operators file, object, acknowledge and retain the actual backend stat
     .filter({ hasText: notice.id })
     .click();
   await page
-    .getByRole("textbox", { name: "RESPONSE / OPTIONAL" })
+    .getByRole("textbox", { name: "RESPONSE / REASON REQUIRED FOR OBJECTION" })
     .fill("Please move the landing site to reduce exposure.");
   await page.getByRole("button", { name: "OBJECT", exact: true }).click();
   await expect(page.locator(".coordination-detail")).toContainText(
@@ -193,8 +199,11 @@ test("two operators file, object, acknowledge and retain the actual backend stat
     "Acknowledgement recorded",
   );
   await expect(page.locator(".coordination-detail")).toContainText(
-    "No plan-update or resolution endpoint",
+    "coordinated",
   );
+  await request.post("/api/session/demo", {
+    data: { operator_id: notice.to_operator_id },
+  });
   const saved = await (
     await request.get(`/api/notices?operator_id=${notice.to_operator_id}`)
   ).json();
@@ -207,9 +216,10 @@ test("two operators file, object, acknowledge and retain the actual backend stat
   await expect(page.locator(".coordination-notices")).toContainText(
     "acknowledged",
   );
+  await request.post("/api/session/demo", { data: { operator_id: "kestrel" } });
   const plans = await (await request.get("/api/plans")).json();
   expect(plans.find((p: { id: string }) => p.id === filed.plan.id).status).toBe(
-    "consultation",
+    "coordinated",
   );
   expect(errors).toEqual([]);
 });
@@ -400,10 +410,11 @@ test("guided demonstration completes both operator perspectives without inventin
   await guide
     .getByRole("button", { name: "FILE REVISED", exact: true })
     .click();
-  await expect(guide).toContainText("Original objections remain open");
+  await expect(guide).toContainText("Original objections remain in history");
   await page.screenshot({ path: `${output}/guided-coordination.png` });
   await guide.getByRole("button", { name: "FINISH", exact: true }).click();
   await expect(guide).toHaveCount(0);
+  await request.post("/api/session/demo", { data: { operator_id: "kestrel" } });
   const plans = await (await request.get("/api/plans")).json();
   expect(
     plans.some((p: { name: string }) => p.name === "KLL Cargo-7 · revised"),

@@ -1,0 +1,2847 @@
+/* PLUME / immersive surface edition. Interface stays separate from model data. */
+:root {
+  --panel: rgba(3, 13, 23, 0.9);
+  --line: rgba(96, 160, 195, 0.2);
+  --line-strong: rgba(96, 185, 230, 0.38);
+  --faint: #8295a9;
+}
+.mission-app {
+  grid-template-rows: 82px minmax(0, 1fr) 26px;
+}
+.flight-header {
+  background: #02080eea;
+  padding: 0 25px;
+  gap: 23px;
+  border-bottom: 1px solid #43799b35;
+}
+.flight-brand > span {
+  font-size: 29px;
+  letter-spacing: 0.16em;
+}
+.flight-brand small {
+  font-size: 7px;
+  letter-spacing: 0.17em;
+}
+.flight-brand img {
+  width: 49px;
+  height: 49px;
+}
+.environment-label,
+.header-divider {
+  display: none;
+}
+.header-right {
+  gap: 21px;
+}
+.connection-label {
+  display: none;
+}
+.public-nav {
+  gap: 32px;
+  margin-left: auto;
+}
+.public-nav button {
+  font-size: 12px;
+}
+.public-nav button:last-child {
+  border: 1px solid #65d9ff66;
+  border-radius: 24px;
+  padding: 10px 23px;
+  color: var(--ice);
+}
+.operational-nav {
+  display: flex;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 10px;
+  margin-left: auto;
+}
+.operational-nav button {
+  background: none;
+  border: 0;
+  position: relative;
+  padding: 0 22px;
+  color: #b7c4d4;
+  font-size: 12px;
+}
+.operational-nav button.active {
+  color: #f4fbff;
+  background: radial-gradient(ellipse at center, #0e77aa42, transparent 70%);
+}
+.operational-nav button.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--ice);
+  box-shadow: 0 0 16px #65d9ffa0;
+}
+.operator-switch select {
+  font-size: 11px;
+}
+.subscription-badge {
+  border-radius: 5px;
+}
+.demo-button {
+  border-radius: 20px;
+  padding: 10px 17px;
+}
+.utc-clock {
+  font-size: 11px;
+}
+.flight-footer {
+  background: #02080f;
+  letter-spacing: 0.08em;
+  font-size: 7px;
+}
+/* A dimensional marketing environment, with independently moving overlays. */
+.cinematic-gateway {
+  background: #02070d;
+  overflow: hidden;
+  --look-x: 0px;
+  --look-y: 0px;
+  pointer-events: auto;
+}
+.hero-environment {
+  position: absolute;
+  inset: -20px;
+  background: url("/lunar-hero.png") center 55% / cover;
+  transform: translate3d(var(--look-x), var(--look-y), 0) scale(1.035);
+  transition: transform 0.7s ease-out;
+  animation: environment-arrive 1.8s ease both;
+}
+.hero-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #02070dc9, transparent 70%),
+    linear-gradient(
+      0deg,
+      #02070df0,
+      transparent 23%,
+      transparent 80%,
+      #02070d40
+    );
+}
+.cinematic-gateway .gateway-copy {
+  left: 5.5%;
+  top: 12%;
+  max-width: 760px;
+}
+.cinematic-gateway .eyeline {
+  color: var(--ice);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+}
+.cinematic-gateway .eyeline > span {
+  background: var(--ice);
+  width: 43px;
+}
+.cinematic-gateway h1 {
+  font: 500 clamp(55px, 4.7vw, 93px) / 1.08 var(--brand);
+  letter-spacing: -0.05em;
+  margin: 28px 0 23px;
+  animation: copy-arrive 0.9s 0.15s both;
+}
+.cinematic-gateway h1 > span {
+  white-space: nowrap;
+  font-size: 0.91em;
+  background: linear-gradient(100deg, #65d9ff 20%, #bddbf2 65%, #e9bd83);
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 17px #65d9ff18);
+}
+.cinematic-gateway .gateway-copy > p {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #c5d2df;
+  animation: copy-arrive 0.9s 0.25s both;
+}
+.cinematic-gateway .gateway-actions {
+  margin-top: 30px;
+  gap: 24px;
+  animation: copy-arrive 0.9s 0.35s both;
+}
+.action-primary {
+  border-radius: 24px;
+  min-height: 44px;
+  background: linear-gradient(110deg, #6ce5ff, #5db9f7);
+  border-color: #65d9ff77;
+  box-shadow:
+    inset 0 1px 0 #e4faff66,
+    0 0 25px #65d9ff12;
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+.action-primary:hover:not(:disabled) {
+  box-shadow: 0 0 30px #65d9ff38;
+  transform: translateY(-1px);
+}
+.cinematic-gateway .action-primary {
+  min-height: 53px;
+  font:
+    500 12px Inter,
+    sans-serif;
+  padding: 15px 27px;
+  gap: 30px;
+}
+.watch-demo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: #020a1277;
+  border: 1px solid #b3c8db70;
+  border-radius: 28px;
+  padding: 12px 21px;
+  color: #eef6ff;
+  font-size: 12px;
+}
+.watch-demo > span {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #a3bdd5;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.watch-demo:hover {
+  background: #65d9ff14;
+  border-color: var(--ice);
+}
+.hero-proof {
+  display: flex;
+  gap: 28px;
+  margin-top: 38px;
+  animation: copy-arrive 0.9s 0.45s both;
+}
+.hero-proof > div {
+  padding-right: 28px;
+  border-right: 1px solid #c6dded3b;
+}
+.hero-proof > div:last-child {
+  border: 0;
+}
+.hero-proof strong {
+  font: 500 31px var(--brand);
+  color: #edf6ff;
+  display: block;
+}
+.hero-proof span {
+  font: 7px var(--mono);
+  letter-spacing: 0.12em;
+  color: #adbdce;
+  display: block;
+  margin-top: 6px;
+}
+.orbital-flow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.6;
+  filter: drop-shadow(0 0 5px #65d9ff);
+}
+.orbit-moving {
+  animation: orbit-travel 14s linear infinite;
+}
+.frontier-timeline {
+  position: absolute;
+  right: 4%;
+  top: 16%;
+  width: 155px;
+  display: grid;
+  gap: 25px;
+  pointer-events: none;
+}
+.frontier-timeline > span {
+  font: 8px var(--mono);
+  letter-spacing: 0.12em;
+  color: #7ea2bb;
+}
+.frontier-timeline > div {
+  border-left: 1px solid #6298b83b;
+  padding: 0 0 5px 17px;
+  position: relative;
+}
+.frontier-timeline i {
+  position: absolute;
+  left: -3px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #9cdeff;
+  box-shadow: 0 0 10px #65d9ff;
+}
+.frontier-timeline strong {
+  display: block;
+  font: 400 16px var(--brand);
+  color: #badff6;
+}
+.frontier-timeline small {
+  display: block;
+  color: #a9b9ca;
+  font-size: 9px;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+.frontier-timeline .future strong {
+  color: var(--gold);
+}
+.frontier-timeline .future i {
+  background: var(--gold);
+  box-shadow: 0 0 10px #e9bd83;
+}
+.hero-bottom-deck {
+  position: absolute;
+  left: 3.5%;
+  right: 3.5%;
+  bottom: 60px;
+  display: flex;
+  gap: 24px;
+  animation: copy-arrive 1s 0.6s both;
+}
+.active-region-card {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  padding: 15px;
+  background: #061320d9;
+  border: 1px solid #4eaee870;
+  border-radius: 12px;
+  min-width: 380px;
+  text-align: left;
+  box-shadow: 0 0 25px #65d9ff09;
+}
+.active-region-card > img {
+  width: 85px;
+  height: 75px;
+  object-fit: cover;
+  border-radius: 7px;
+  filter: brightness(0.85);
+}
+.active-region-card > span {
+  flex: 1;
+}
+.active-region-card small {
+  font: 7px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--ice);
+}
+.active-region-card strong {
+  font: 400 20px var(--brand);
+  display: block;
+  margin: 6px 0;
+}
+.active-region-card em {
+  font:
+    9px Inter,
+    sans-serif;
+  color: #a8bed2;
+  font-style: normal;
+}
+.active-region-card > svg {
+  color: var(--ice);
+  margin: 0 10px;
+}
+.active-region-card:hover {
+  border-color: var(--ice);
+  background: #0c2238e8;
+}
+.frontier-features {
+  flex: 1;
+  display: flex;
+  background: #06111dd9;
+  border: 1px solid #558fb33b;
+  border-radius: 12px;
+  padding: 17px 9px;
+  backdrop-filter: blur(15px);
+}
+.frontier-features > button {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: none;
+  border: 0;
+  padding: 6px 18px;
+  text-align: left;
+}
+.frontier-features > button + button {
+  border-left: 1px solid #5a879830;
+}
+.frontier-features > button > span {
+  width: 42px;
+  height: 45px;
+  display: grid;
+  place-items: center;
+  color: var(--ice);
+  border: 1px solid #65d9ff25;
+  background: #65d9ff04;
+  border-radius: 7px;
+}
+.frontier-features strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e6f2fb;
+}
+.frontier-features small {
+  display: block;
+  font-size: 9px;
+  line-height: 1.7;
+  color: #a4b6c9;
+  max-width: 130px;
+  margin-top: 5px;
+}
+.frontier-features > button:hover {
+  background: #65d9ff09;
+}
+.hero-art-caption {
+  position: absolute;
+  bottom: 24px;
+  left: 5%;
+  font: 7px var(--mono);
+  letter-spacing: 0.12em;
+  color: #8da3b7;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+.hero-art-caption > span {
+  width: 40px;
+  height: 1px;
+  background: #7d9eb055;
+}
+.mode-gateway .persistent-scene {
+  visibility: hidden;
+}
+.cinematic-gateway .inline-error {
+  background: #150b0ce6;
+  border: 1px solid #ff684a50;
+  border-radius: 5px;
+  padding: 10px 13px;
+}
+/* Mission sidebar and scene composition. */
+.mission-rail {
+  width: 216px;
+  background: #030c14ee;
+  border-right: 1px solid #5e92b22b;
+  backdrop-filter: blur(16px);
+}
+.rail-region-card {
+  display: block !important;
+  height: auto !important;
+  width: calc(100% - 28px) !important;
+  margin: 14px !important;
+  text-align: left !important;
+  border: 1px solid #4c86a839 !important;
+  border-radius: 9px !important;
+  overflow: hidden;
+  padding: 0 0 14px !important;
+  background: #06111e80 !important;
+}
+.rail-region-card > div {
+  height: 100px;
+  width: 100%;
+  background-position: 73% 55%;
+  background-size: cover;
+  mask-image: linear-gradient(#000 70%, transparent);
+}
+.rail-region-card > strong {
+  display: block;
+  font: 400 17px var(--brand);
+  margin: 0 13px 5px;
+}
+.rail-region-card > small {
+  display: block;
+  font-size: 9px;
+  color: #a1b5ca;
+  margin: 0 13px 12px;
+}
+.rail-region-card > span {
+  font: 6px var(--mono) !important;
+  color: #8eb7d0 !important;
+  margin: 0 13px;
+  letter-spacing: 0.02em;
+}
+.rail-region-card .status-dot {
+  width: 4px;
+  height: 4px;
+}
+.rail-index {
+  text-align: left;
+  font-size: 7px;
+  padding: 12px 25px;
+}
+.mission-rail .rail-top > button:not(.rail-region-card),
+.mission-rail .rail-bottom > button {
+  height: 47px;
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 0 24px;
+  gap: 15px;
+  color: #aebed0;
+}
+.mission-rail button span {
+  font-size: 11px;
+}
+.mission-rail button.active {
+  background: linear-gradient(90deg, #1170a22a, #1170a206);
+  color: #a6eaff;
+}
+.mission-rail button.active i {
+  top: 6px;
+  bottom: 6px;
+  box-shadow: 0 0 12px #65d9ff;
+}
+.mission-rail .rail-top > button > svg {
+  width: 19px;
+}
+.rail-bottom {
+  border-top: 1px solid #52779126;
+  padding: 8px 0;
+}
+.mission-rail .rail-bottom > button {
+  height: 40px;
+  font-size: 10px;
+}
+.rail-mission-card {
+  margin: auto 15px 17px;
+  border: 1px solid #5485a433;
+  border-radius: 8px;
+  padding: 14px;
+  background: #07131e8c;
+}
+.rail-mission-card > span {
+  font: 7px var(--mono);
+  color: #7f9ab1;
+  letter-spacing: 0.07em;
+}
+.rail-mission-card > strong {
+  display: block;
+  font: 400 17px var(--brand);
+  margin-top: 7px;
+}
+.rail-mission-card > small {
+  font: 8px var(--mono);
+  color: #9eb4c9;
+  display: block;
+  margin-top: 7px;
+}
+.rail-mission-card > div {
+  display: flex;
+  gap: 12px;
+  color: #7e9bb3;
+  font-size: 8px;
+  margin-top: 13px;
+}
+.mission-rail .rail-mission-card > button {
+  width: 100%;
+  height: auto;
+  margin-top: 15px;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 9px 0 0;
+  border-top: 1px solid #53748b40;
+  color: var(--ice);
+  font-size: 9px;
+}
+.operations-panel {
+  display: none;
+}
+.floating-panel {
+  border-radius: 11px;
+  background: linear-gradient(150deg, #06131fef, #030c16ed);
+  border-color: #4e88a43b;
+  box-shadow: 0 10px 45px #0003;
+  backdrop-filter: blur(20px);
+}
+.exposure-panel {
+  top: 100px;
+  right: 22px;
+  bottom: 267px;
+  width: 302px;
+}
+.panel-header {
+  font-size: 9px;
+  min-height: 44px;
+  padding: 14px 19px;
+  color: #c5d6e4;
+  letter-spacing: 0.08em;
+}
+.panel-content {
+  padding: 22px 19px;
+}
+.hero-metric {
+  font-size: 43px;
+}
+.metric-caption {
+  font-size: 8px;
+  line-height: 1.7;
+  color: #9cb3c6;
+}
+.panel-section {
+  padding: 17px 19px;
+}
+.panel-note {
+  color: #819aaf;
+  font-size: 10px;
+}
+.exposure-list > button > div:first-child {
+  font-size: 11px;
+}
+.exposure-list small {
+  font-size: 8px;
+}
+.panel-subtitle {
+  font-size: 8px;
+}
+.mini-metrics span {
+  font-size: 9px;
+}
+.exposure-panel > .optimizer-invitation {
+  display: none;
+}
+.outline-button {
+  border-radius: 7px;
+  font-size: 9px;
+  letter-spacing: 0.01em;
+  border-color: #508eb044;
+}
+.exposure-panel .action-primary {
+  border-radius: 8px;
+}
+.risk-pill {
+  font-size: 8px;
+}
+.scene-heading {
+  left: 245px;
+  top: 29px;
+}
+.scene-heading h1 {
+  font: 500 38px/1.15 var(--brand);
+  letter-spacing: -0.04em;
+  margin: 10px 0 9px;
+}
+.scene-eyebrow {
+  font: 8px var(--mono);
+  letter-spacing: 0.16em;
+  color: var(--ice);
+}
+.scene-heading p {
+  font-size: 7px;
+  color: #9ab0c5;
+}
+.view-controls {
+  top: 28px;
+  right: 22px;
+  background: #04101bea;
+  border-radius: 8px;
+  padding: 5px;
+  border-color: #568da53b;
+}
+.view-controls button {
+  padding: 8px 9px;
+  border-radius: 5px;
+}
+.view-controls button span {
+  font-size: 8px;
+}
+.view-controls button.active {
+  background: #1276a832;
+  color: #a1e6ff;
+}
+.view-controls i {
+  margin: 0 2px;
+}
+.scene-help {
+  left: 248px;
+  bottom: 249px;
+  font-size: 8px;
+  color: #8ba7bc;
+}
+.map-legend {
+  left: auto;
+  right: 22px;
+  bottom: 181px;
+  width: 302px;
+  padding: 13px 17px;
+  background: #03101de8;
+  border: 1px solid #568da53b;
+  border-radius: 9px;
+}
+.map-legend .panel-subtitle {
+  font-size: 7px;
+}
+.map-scale {
+  margin-top: 12px;
+  font-size: 7px;
+}
+.map-legend > p {
+  font-size: 8px;
+}
+.legend-colors {
+  margin: 8px 0 5px;
+}
+.legend-values {
+  font-size: 7px;
+}
+.map-scale em {
+  font-size: 6px;
+}
+.compute-status {
+  top: 185px;
+  border-radius: 6px;
+  font-size: 9px;
+  background: #031421eb;
+}
+.command-overview {
+  left: 245px;
+  top: auto;
+  bottom: 253px;
+  background: #031321d9;
+  border-radius: 7px;
+}
+.command-overview > div,
+.command-overview > button {
+  padding: 8px 15px;
+}
+.command-overview strong {
+  font-size: 17px;
+}
+.command-overview span {
+  font-size: 5px;
+}
+.mode-operations .scene-help {
+  bottom: 310px;
+}
+.mode-registry .scene-heading,
+.mode-notices .scene-heading {
+  left: 245px;
+}
+.mode-registry .registry-panel,
+.mode-notices .coordination-list {
+  left: 236px;
+  top: 175px;
+  bottom: 265px;
+  width: 270px;
+}
+.mode-registry .registry-detail,
+.mode-notices .coordination-detail {
+  right: 22px;
+  top: 100px;
+  bottom: 267px;
+  width: 302px;
+}
+.mode-registry .scene-help,
+.mode-notices .scene-help {
+  display: none;
+}
+/* Search, layers and real scene modes. */
+.spatial-toolbar {
+  position: absolute;
+  left: 245px;
+  right: 345px;
+  top: 133px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 32;
+  pointer-events: none;
+}
+.spatial-toolbar > div,
+.spatial-toolbar > details,
+.spatial-toolbar > button {
+  pointer-events: auto;
+}
+.asset-search {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  position: relative;
+  max-width: 390px;
+  width: 40%;
+  min-width: 230px;
+  background: #04101ae8;
+  border: 1px solid #508db049;
+  border-radius: 8px;
+  padding: 9px 13px;
+  height: 42px;
+  color: #83a7c1;
+}
+.asset-search > input {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: #d1e4f1;
+  font-size: 10px;
+  outline: 0 !important;
+  padding: 0;
+}
+.asset-search > input::placeholder {
+  color: #7b99ae;
+}
+.search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 49px;
+  background: #051421f7;
+  border: 1px solid #65d9ff55;
+  box-shadow: 0 15px 30px #0005;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.search-results > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px;
+  border: 0;
+  background: none;
+  color: var(--ice);
+  text-align: left;
+}
+.search-results > button:hover {
+  background: #65d9ff12;
+}
+.search-results > button > span {
+  flex: 1;
+  font-size: 11px;
+  color: #dfebf5;
+}
+.search-results small {
+  display: block;
+  font-size: 8px;
+  color: #86a2b7;
+  text-transform: capitalize;
+  margin-top: 5px;
+}
+.search-results > p {
+  font-size: 11px;
+  color: #9eb5c7;
+  margin: 0;
+  padding: 15px;
+}
+.layer-popover {
+  position: relative;
+  background: #04101ae8;
+  border: 1px solid #508db049;
+  border-radius: 8px;
+  height: 42px;
+}
+.layer-popover > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  padding: 0 14px;
+  cursor: pointer;
+  font: 8px var(--mono);
+  letter-spacing: 0.04em;
+  color: #b8d7e9;
+}
+.layer-popover > summary::-webkit-details-marker {
+  display: none;
+}
+.layer-popover > div {
+  position: absolute;
+  top: 49px;
+  width: 260px;
+  background: #051421f7;
+  border: 1px solid #65d9ff55;
+  box-shadow: 0 15px 30px #0005;
+  border-radius: 8px;
+  padding: 18px;
+}
+.layer-popover label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #c5d7e6;
+  margin-top: 17px;
+  cursor: pointer;
+}
+.layer-popover input {
+  margin-left: auto;
+  accent-color: var(--ice);
+  width: 14px;
+  height: 14px;
+}
+.layer-popover label svg {
+  color: var(--ice);
+}
+.scene-style-switch {
+  display: flex;
+  gap: 3px;
+  height: 42px;
+  background: #04101ae8;
+  border: 1px solid #508db049;
+  border-radius: 8px;
+  padding: 4px;
+  margin-left: auto;
+}
+.scene-style-switch > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  background: none;
+  border: 0;
+  color: #8eacc1;
+  font-size: 9px;
+  border-radius: 4px;
+}
+.scene-style-switch > button.active {
+  color: #a8e8ff;
+  background: #1a7fa72b;
+}
+.placement-instruction {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  font: 9px var(--mono);
+  background: #08273cf0;
+  border: 1px solid #65d9ff55;
+  padding: 10px 14px;
+  border-radius: 5px;
+  color: #ade8ff;
+}
+.return-overview {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #031322e8;
+  border: 1px solid #65d9ff55;
+  color: var(--ice);
+  padding: 8px 12px;
+  border-radius: 5px;
+  font: 8px var(--mono);
+}
+.mode-registry .spatial-toolbar {
+  top: 125px;
+}
+.mode-registry .asset-search {
+  display: none;
+}
+.mode-registry .scene-style-switch {
+  margin-left: 0;
+}
+/* Spatial action deck and camera destinations. */
+.workspace-dock {
+  position: absolute;
+  left: 236px;
+  right: 22px;
+  bottom: 117px;
+  display: flex;
+  gap: 16px;
+  height: 116px;
+  z-index: 29;
+}
+.selected-context {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  flex: 1;
+  min-width: 0;
+  padding: 15px 18px;
+  background: #04111ee8;
+  border: 1px solid #568da53b;
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+}
+.context-art {
+  height: 75px;
+  width: 92px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse, #126d9444, transparent 70%),
+    url("/moon.jpg") center/cover;
+  border: 1px solid #65d9ff33;
+  border-radius: 7px;
+  color: #9aeaff;
+  position: relative;
+  overflow: hidden;
+}
+.context-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #02101cc2;
+}
+.context-art > svg {
+  position: relative;
+  filter: drop-shadow(0 0 12px #65d9ff);
+}
+.art-orbit {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border: 1px dashed #65d9ff77;
+  border-radius: 50%;
+  animation: orbit-spin 20s linear infinite;
+}
+.dock-eyebrow {
+  font: 7px var(--mono);
+  letter-spacing: 0.1em;
+  color: #a6c1d4;
+}
+.selected-context h3 {
+  font: 400 19px var(--brand);
+  letter-spacing: -0.025em;
+  margin: 8px 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.selected-context p {
+  font-size: 9px;
+  color: #8eabc0;
+  margin: 0;
+  text-transform: capitalize;
+}
+.context-numbers {
+  display: grid;
+  gap: 9px;
+  margin-left: auto;
+  min-width: 180px;
+}
+.context-numbers > span {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #95b0c5;
+}
+.context-numbers b {
+  font: 9px var(--mono);
+  color: #d1e6f4;
+  font-weight: 400;
+}
+.quick-actions {
+  width: 440px;
+  flex: none;
+  padding: 13px 15px;
+  background: #04111ee8;
+  border: 1px solid #568da53b;
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+}
+.quick-actions > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+}
+.quick-actions button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 68px;
+  background: #04131f;
+  border: 1px solid #34637b50;
+  border-radius: 7px;
+  color: #a1deff;
+  font-size: 9px;
+}
+.quick-actions button span {
+  color: #c1d5e5;
+  font-size: 9px;
+}
+.quick-actions button:hover {
+  border-color: #65d9ff99;
+  background: #0b293e;
+  box-shadow: 0 0 17px #65d9ff11;
+}
+.viewpoint-strip {
+  position: absolute;
+  left: 236px;
+  right: 22px;
+  bottom: 16px;
+  height: 88px;
+  display: flex;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #568da53b;
+  border-radius: 11px;
+  background: #020c16ec;
+  z-index: 29;
+}
+.viewpoint-caption {
+  width: 115px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 9px;
+  flex: none;
+}
+.viewpoint-caption > span {
+  font: 7px/1.8 var(--mono);
+  letter-spacing: 0.08em;
+  color: #9bbad0;
+}
+.viewpoint-caption > small {
+  font: 5px var(--mono);
+  color: #597e98;
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+}
+.viewpoint-card {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  text-align: left;
+  padding: 13px 15px 8px;
+  background-position: center 57%;
+  background-size: cover;
+  border: 1px solid #466e8755;
+  border-radius: 7px;
+  overflow: hidden;
+  transition:
+    background-size 0.3s,
+    transform 0.25s,
+    border-color 0.25s;
+  isolation: isolate;
+}
+.viewpoint-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, #020c16ef, transparent 120%);
+  z-index: -1;
+}
+.viewpoint-card:hover {
+  transform: translateY(-3px);
+  border-color: #65d9ff77;
+}
+.viewpoint-card.active {
+  border-color: var(--ice);
+  box-shadow:
+    inset 0 0 13px #65d9ff20,
+    0 0 13px #65d9ff20;
+}
+.viewpoint-number {
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  font: 7px var(--mono);
+  color: #a9dff9;
+}
+.viewpoint-card strong {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  margin-top: 15px;
+  text-shadow: 0 2px 8px black;
+}
+.viewpoint-card small {
+  font: 5px var(--mono);
+  letter-spacing: 0.05em;
+  color: #91b2ca;
+  display: block;
+  margin-top: 5px;
+}
+.viewpoint-card > svg {
+  position: absolute;
+  right: 10px;
+  bottom: 12px;
+  color: var(--ice);
+}
+.view-crater {
+  background-position: 50% 50%;
+  filter: saturate(0.4);
+}
+.view-ridge {
+  background-position: 30% 60%;
+}
+.view-landing {
+  background-position: center 45%;
+}
+.tour-control {
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #06203355;
+  border: 1px solid #65d9ff44;
+  border-radius: 7px;
+  color: var(--ice);
+}
+.tour-control > span {
+  font: 7px var(--mono);
+  letter-spacing: 0.07em;
+}
+.tour-control > small {
+  font-size: 7px;
+  color: #7fa6bf;
+}
+.tour-control.active {
+  background: #0b344e;
+  box-shadow: inset 0 0 20px #65d9ff0a;
+}
+.spatial-label {
+  font:
+    9px Inter,
+    sans-serif;
+  padding: 9px 12px;
+  border: 1px solid #5d9db750;
+  border-left: 2px solid var(--ice);
+  border-radius: 8px;
+  background: #03111eec;
+  box-shadow: 0 6px 20px #0004;
+}
+.spatial-label small {
+  font: 6px var(--mono);
+  margin-top: 6px;
+}
+.spatial-label::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  height: 15px;
+  width: 1px;
+  background: linear-gradient(#65d9ff88, transparent);
+}
+.spatial-label.selected {
+  background: #07304c;
+  border-color: #65d9ff99;
+  box-shadow: 0 0 22px #65d9ff22;
+}
+.site-label {
+  font-size: 8px;
+  padding: 10px 12px;
+  background: #061421ee;
+  border-color: #65d9ff66;
+  border-radius: 8px;
+}
+.site-label small {
+  font-size: 7px;
+}
+.candidate-label {
+  font: 8px var(--mono);
+  padding: 10px 14px;
+  background: #04201ded;
+  border-radius: 7px;
+  box-shadow: 0 0 20px #35d7a00a;
+}
+.candidate-label small {
+  font-size: 8px;
+  margin-top: 6px;
+}
+.candidate-card {
+  border-radius: 8px;
+  padding: 16px;
+  background: #04121dd9;
+}
+.candidate-value {
+  font-size: 30px;
+}
+.candidate-card .data-list {
+  font-size: 10px;
+  gap: 10px;
+}
+.candidate-card .data-list dd {
+  font-size: 9px;
+}
+.candidate-coords {
+  font-size: 8px;
+}
+.optimizer-panel .eyeline {
+  color: var(--ice);
+  font-size: 8px;
+}
+.optimizer-panel h2 {
+  font-size: 29px;
+}
+.panel-intro {
+  font-size: 11px;
+}
+.optimizer-panel .form-label {
+  font-size: 9px;
+}
+.optimizer-panel .panel-content {
+  padding: 20px 18px;
+}
+.optimizer-panel > .panel-content {
+  position: sticky;
+  top: 0;
+  background: #04111ef5;
+  z-index: 2;
+  border-bottom: 1px solid #65d9ff22;
+}
+.optimizer-panel .unit-input > input {
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+}
+.optimizer-panel .unit-input > span {
+  font-size: 8px;
+}
+.mode-optimizer .map-legend {
+  display: none;
+}
+.mode-optimizer .exposure-panel {
+  bottom: 249px;
+}
+.mode-optimizer .workspace-dock {
+  right: 22px;
+}
+.mode-optimizer .viewpoint-strip {
+  right: 22px;
+}
+/* Spacecraft inspection in a generated hangar, with a real rotating model. */
+.mode-setup .mission-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #020911aa, transparent 65%, #02091122),
+    url("/lunar-hangar.png") center/cover;
+  z-index: -2;
+}
+.mode-setup .persistent-scene {
+  z-index: -1;
+}
+.mode-setup .configuration {
+  left: auto;
+  right: 22px;
+  top: 25px;
+  bottom: 145px;
+  width: 315px;
+}
+.mode-setup .scene-heading {
+  left: 250px;
+  top: 40px;
+  max-width: 550px;
+}
+.mode-setup .scene-heading h1 {
+  font-size: 43px;
+  max-width: 460px;
+  line-height: 1.1;
+  text-shadow: 0 2px 15px #000;
+}
+.mode-setup .scene-heading p {
+  background: #020c1488;
+  display: inline-block;
+  padding: 6px 8px;
+  border-radius: 5px;
+}
+.mode-setup .view-controls {
+  right: 365px;
+  top: 36px;
+}
+.mode-setup .view-controls button span {
+  display: none;
+}
+.mode-setup .configuration h2 {
+  font-size: 21px;
+}
+.mode-setup .configuration .panel-content {
+  padding: 19px;
+}
+.mode-setup .configuration .form-label {
+  margin-bottom: 14px;
+  font-size: 8px;
+}
+.mode-setup .configuration .form-label > input,
+.mode-setup .configuration .form-label > select {
+  padding: 9px 11px;
+  border-radius: 5px;
+  background: #020b14c9;
+}
+.mode-setup .section-divider {
+  margin: 18px 0;
+}
+.mode-setup .parameter {
+  margin-bottom: 19px;
+}
+.mode-setup .parameter > span {
+  font-size: 11px;
+}
+.mode-setup .parameter input {
+  height: 3px;
+  margin: 14px 0 7px;
+}
+.mode-setup .coordinate-inputs input {
+  border-radius: 5px;
+}
+.mode-setup .configuration .action-primary {
+  font-size: 9px;
+  margin-top: 17px;
+}
+.mode-setup .lander-annotation {
+  left: 250px;
+  right: auto;
+  bottom: 24%;
+  max-width: 280px;
+  padding: 21px;
+  border: 1px solid #65d9ff55;
+  border-radius: 10px;
+  background: #04111ed9;
+  box-shadow: 0 0 30px #0002;
+}
+.mode-setup .lander-annotation > span {
+  font-size: 6px;
+  color: var(--ice);
+}
+.mode-setup .lander-annotation h3 {
+  font-size: 24px;
+  max-width: 230px;
+}
+.mode-setup .lander-annotation p {
+  font-size: 10px;
+  line-height: 1.8;
+  margin-bottom: 0;
+}
+.mode-setup .scene-help {
+  left: 250px;
+  bottom: 145px;
+}
+.preset-dock {
+  position: absolute;
+  left: 236px;
+  right: 22px;
+  bottom: 20px;
+  background: #04111eeb;
+  border: 1px solid #568da54f;
+  border-radius: 11px;
+  padding: 15px 17px;
+  z-index: 29;
+  height: 108px;
+}
+.preset-dock > .dock-eyebrow {
+  display: flex;
+  justify-content: space-between;
+}
+.preset-dock > .dock-eyebrow > span {
+  color: #6c8ca4;
+  font-size: 6px;
+}
+.preset-dock > div:last-child {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+.preset-dock button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 59px;
+  padding: 9px 15px;
+  background: #04121d;
+  border: 1px solid #42718b50;
+  border-radius: 8px;
+  text-align: left;
+  color: #93cde9;
+}
+.preset-dock button > span:not(.preset-selected) {
+  flex: 1;
+  font-size: 11px;
+  color: #d0e1ef;
+}
+.preset-dock small {
+  display: block;
+  font: 7px var(--mono);
+  color: #829fb6;
+  margin-top: 6px;
+}
+.preset-dock .preset-selected {
+  border: 1px solid #527c9677;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.preset-dock button.active {
+  border-color: var(--ice);
+  background: #0d3147;
+  box-shadow: inset 0 0 20px #65d9ff0a;
+}
+.preset-dock button.active .preset-selected {
+  border-color: var(--ice);
+  background: var(--ice);
+  color: #04121d;
+}
+/* Replay and other existing workflows stay integrated. */
+.mode-simulation .exposure-panel,
+.mode-replay .exposure-panel {
+  bottom: 170px;
+}
+.mode-simulation .timeline-panel,
+.mode-replay .timeline-panel {
+  left: 236px;
+  right: 22px;
+  bottom: 24px;
+  border-radius: 10px;
+  padding: 18px 22px;
+}
+.timeline-heading {
+  font-size: 9px;
+}
+.timeline-heading > small {
+  font-size: 8px;
+}
+.timeline-controls {
+  gap: 16px;
+}
+.timeline-track input {
+  height: 3px;
+}
+.phase-labels button {
+  font-size: 8px;
+}
+.timeline-time {
+  font-size: 11px;
+}
+.mode-simulation .map-legend,
+.mode-replay .map-legend {
+  bottom: 170px;
+}
+.mode-simulation .scene-help,
+.mode-replay .scene-help {
+  bottom: 160px;
+}
+.report-workspace,
+.legacy-view {
+  left: 216px;
+}
+.report-workspace {
+  background: #030b13f0;
+}
+.mission-report {
+  border-radius: 10px;
+}
+.report-toolbar h1 {
+  font-size: 36px;
+}
+.pricing-workspace {
+  padding-top: 40px;
+}
+.mission-error,
+.mission-toast {
+  border-radius: 9px;
+}
+.guided-demo {
+  border-radius: 9px;
+  bottom: 8px;
+  z-index: 60;
+}
+.mode-setup .guided-demo {
+  bottom: 137px;
+}
+.mode-report .guided-demo {
+  bottom: 15px;
+}
+.mode-notices .guided-demo {
+  bottom: 24px;
+}
+.mode-pricing .flight-footer > span:nth-child(2),
+.mode-login .flight-footer > span:nth-child(2) {
+  visibility: hidden;
+}
+@keyframes orbit-travel {
+  to {
+    stroke-dashoffset: -2400;
+  }
+}
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes environment-arrive {
+  from {
+    filter: brightness(0.3);
+    scale: 1.07;
+  }
+  to {
+    filter: brightness(1);
+    scale: 1;
+  }
+}
+@keyframes copy-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 1750px) {
+  .cinematic-gateway .gateway-copy {
+    top: 14%;
+  }
+  .cinematic-gateway h1 {
+    font-size: 93px;
+  }
+  .cinematic-gateway .gateway-copy > p {
+    font-size: 18px;
+  }
+  .hero-proof {
+    margin-top: 42px;
+  }
+  .hero-bottom-deck {
+    bottom: 65px;
+  }
+  .frontier-features > button {
+    padding: 9px 24px;
+  }
+  .frontier-features strong {
+    font-size: 13px;
+  }
+  .frontier-features small {
+    font-size: 10px;
+  }
+  .exposure-panel {
+    width: 320px;
+  }
+  .spatial-toolbar {
+    right: 367px;
+  }
+  .view-controls {
+    right: 22px;
+  }
+  .selected-context h3 {
+    max-width: 340px;
+  }
+  .context-numbers {
+    min-width: 230px;
+  }
+  .quick-actions {
+    width: 470px;
+  }
+  .scene-heading h1 {
+    font-size: 43px;
+  }
+  .asset-search > input {
+    font-size: 11px;
+  }
+  .layer-popover > summary {
+    font-size: 9px;
+  }
+  .scene-style-switch > button {
+    font-size: 10px;
+    padding: 0 11px;
+  }
+  .mode-setup .configuration {
+    width: 335px;
+  }
+  .mode-setup .scene-heading h1 {
+    font-size: 49px;
+  }
+  .mode-setup .view-controls {
+    right: 383px;
+  }
+  .mode-setup .lander-annotation {
+    bottom: 28%;
+  }
+  .mode-setup .configuration .panel-content {
+    padding: 22px;
+  }
+  .mode-setup .parameter {
+    margin-bottom: 23px;
+  }
+  .mode-setup .configuration .form-label {
+    font-size: 9px;
+  }
+  .preset-dock button > span:not(.preset-selected) {
+    font-size: 12px;
+  }
+  .preset-dock small {
+    font-size: 8px;
+  }
+}
+@media (max-width: 1400px) {
+  .mission-rail {
+    width: 185px;
+  }
+  .rail-region-card > div {
+    height: 78px;
+  }
+  .rail-region-card > strong {
+    font-size: 15px;
+  }
+  .rail-region-card > span {
+    font-size: 5px !important;
+  }
+  .mission-rail .rail-top > button:not(.rail-region-card),
+  .mission-rail .rail-bottom > button {
+    padding: 0 20px;
+    gap: 12px;
+  }
+  .mission-rail .rail-top > button:not(.rail-region-card) {
+    height: 43px;
+  }
+  .mission-rail button span {
+    font-size: 10px;
+  }
+  .rail-mission-card {
+    padding: 11px;
+    margin: 10px 12px;
+  }
+  .rail-mission-card > strong {
+    font-size: 15px;
+  }
+  .flight-brand small {
+    display: none;
+  }
+  .flight-brand > span {
+    font-size: 25px;
+  }
+  .operational-nav button {
+    padding: 0 14px;
+    font-size: 11px;
+  }
+  .header-right {
+    gap: 12px;
+  }
+  .utc-clock {
+    display: none;
+  }
+  .operator-switch select {
+    max-width: 170px;
+    font-size: 10px;
+  }
+  .demo-button {
+    font-size: 8px;
+    padding: 9px 13px;
+  }
+  .scene-heading,
+  .mode-registry .scene-heading,
+  .mode-notices .scene-heading {
+    left: 210px;
+  }
+  .scene-heading h1 {
+    font-size: 32px;
+  }
+  .spatial-toolbar {
+    left: 210px;
+    top: 125px;
+  }
+  .scene-style-switch > button {
+    font-size: 0;
+    gap: 0;
+    padding: 0 10px;
+  }
+  .workspace-dock,
+  .viewpoint-strip,
+  .preset-dock {
+    left: 201px;
+  }
+  .viewpoint-caption {
+    display: none;
+  }
+  .quick-actions {
+    width: 350px;
+  }
+  .quick-actions button span {
+    font-size: 8px;
+  }
+  .selected-context {
+    gap: 12px;
+    padding: 12px;
+  }
+  .context-numbers {
+    min-width: 150px;
+  }
+  .context-numbers > span {
+    font-size: 8px;
+    gap: 10px;
+  }
+  .context-art {
+    width: 65px;
+    height: 65px;
+  }
+  .selected-context h3 {
+    font-size: 16px;
+    max-width: 200px;
+  }
+  .selected-context p {
+    font-size: 8px;
+  }
+  .dock-eyebrow {
+    font-size: 6px;
+  }
+  .exposure-panel {
+    width: 280px;
+  }
+  .spatial-toolbar {
+    right: 322px;
+  }
+  .map-legend {
+    width: 280px;
+  }
+  .command-overview {
+    left: 210px;
+  }
+  .mode-setup .scene-heading,
+  .mode-setup .lander-annotation {
+    left: 210px;
+  }
+  .mode-setup .scene-heading h1 {
+    font-size: 37px;
+    max-width: 340px;
+  }
+  .mode-setup .configuration {
+    width: 285px;
+  }
+  .mode-setup .view-controls {
+    right: 330px;
+    top: 122px;
+  }
+  .mode-setup .lander-annotation {
+    max-width: 230px;
+    bottom: 22%;
+    padding: 17px;
+  }
+  .mode-setup .lander-annotation h3 {
+    font-size: 20px;
+  }
+  .preset-dock button {
+    gap: 10px;
+    padding: 8px 11px;
+  }
+  .preset-dock button > span:not(.preset-selected) {
+    font-size: 10px;
+  }
+  .preset-dock button > svg {
+    width: 22px;
+  }
+  .mode-registry .registry-panel,
+  .mode-notices .coordination-list {
+    left: 201px;
+    width: 245px;
+  }
+  .mode-registry .registry-detail,
+  .mode-notices .coordination-detail {
+    width: 280px;
+  }
+  .report-workspace,
+  .legacy-view {
+    left: 185px;
+  }
+  .cinematic-gateway .gateway-copy {
+    top: 12%;
+    left: 5%;
+  }
+  .cinematic-gateway h1 {
+    font-size: 73px;
+  }
+  .cinematic-gateway .gateway-copy > p {
+    font-size: 15px;
+  }
+  .hero-proof {
+    margin-top: 27px;
+    gap: 22px;
+  }
+  .hero-proof strong {
+    font-size: 27px;
+  }
+  .hero-proof span {
+    font-size: 6px;
+  }
+  .frontier-timeline {
+    right: 3%;
+    top: 17%;
+    width: 125px;
+    gap: 18px;
+  }
+  .frontier-timeline strong {
+    font-size: 14px;
+  }
+  .frontier-timeline small {
+    font-size: 8px;
+  }
+  .hero-bottom-deck {
+    gap: 15px;
+    left: 3%;
+    right: 3%;
+    bottom: 47px;
+  }
+  .active-region-card {
+    min-width: 310px;
+    padding: 12px;
+    gap: 12px;
+  }
+  .active-region-card > img {
+    width: 65px;
+    height: 65px;
+  }
+  .active-region-card strong {
+    font-size: 17px;
+  }
+  .active-region-card em {
+    font-size: 8px;
+  }
+  .frontier-features > button {
+    padding: 5px 11px;
+    gap: 9px;
+  }
+  .frontier-features > button > span {
+    width: 32px;
+    height: 38px;
+  }
+  .frontier-features strong {
+    font-size: 10px;
+  }
+  .frontier-features small {
+    font-size: 8px;
+  }
+  .hero-art-caption {
+    bottom: 17px;
+    font-size: 6px;
+  }
+}
+@media (max-width: 1100px) {
+  .flight-header {
+    gap: 15px;
+  }
+  .operational-nav {
+    gap: 0;
+  }
+  .operational-nav button {
+    padding: 0 11px;
+    font-size: 10px;
+  }
+  .flight-brand > span {
+    font-size: 21px;
+  }
+  .flight-brand img {
+    width: 38px;
+    height: 38px;
+  }
+  .mission-rail {
+    width: 70px;
+  }
+  .rail-region-card,
+  .rail-mission-card {
+    display: none !important;
+  }
+  .mission-rail .rail-top > button:not(.rail-region-card),
+  .mission-rail .rail-bottom > button {
+    justify-content: center;
+    flex-direction: column;
+    padding: 0;
+    gap: 7px;
+    height: 58px;
+  }
+  .mission-rail button span {
+    font-size: 7px;
+  }
+  .rail-index {
+    text-align: center;
+    padding: 20px 0 15px;
+    font-size: 6px;
+  }
+  .rail-bottom {
+    padding-bottom: 7px;
+  }
+  .mission-rail .rail-bottom > button {
+    height: 49px;
+  }
+  .scene-heading,
+  .mode-registry .scene-heading,
+  .mode-notices .scene-heading {
+    left: 95px;
+  }
+  .scene-heading h1 {
+    font-size: 31px;
+  }
+  .spatial-toolbar {
+    left: 95px;
+  }
+  .workspace-dock,
+  .viewpoint-strip,
+  .preset-dock {
+    left: 85px;
+  }
+  .exposure-panel {
+    width: 270px;
+    right: 15px;
+    top: 100px;
+    bottom: 253px;
+  }
+  .spatial-toolbar {
+    right: 302px;
+    gap: 8px;
+  }
+  .asset-search {
+    min-width: 190px;
+    font-size: 9px;
+  }
+  .layer-popover > summary {
+    font-size: 0;
+    gap: 4px;
+    padding: 0 10px;
+  }
+  .scene-style-switch > button {
+    padding: 0 8px;
+  }
+  .selected-context .context-numbers {
+    display: none;
+  }
+  .quick-actions {
+    width: 340px;
+  }
+  .viewpoint-strip {
+    right: 15px;
+    height: 83px;
+  }
+  .workspace-dock {
+    right: 15px;
+  }
+  .viewpoint-card {
+    padding: 8px 10px;
+  }
+  .viewpoint-card strong {
+    font-size: 9px;
+  }
+  .viewpoint-card small {
+    font-size: 4px;
+  }
+  .tour-control {
+    min-width: 105px;
+  }
+  .viewpoint-strip {
+    gap: 8px;
+  }
+  .scene-help {
+    left: 95px;
+  }
+  .command-overview {
+    left: 95px;
+    bottom: 245px;
+    right: auto;
+    top: auto;
+  }
+  .mode-setup .scene-heading,
+  .mode-setup .lander-annotation {
+    left: 95px;
+  }
+  .mode-setup .configuration {
+    right: 15px;
+    width: 275px;
+  }
+  .mode-setup .view-controls {
+    right: 310px;
+  }
+  .mode-setup .scene-heading h1 {
+    font-size: 33px;
+    max-width: 330px;
+  }
+  .mode-setup .lander-annotation {
+    max-width: 200px;
+  }
+  .mode-setup .scene-help {
+    left: 95px;
+  }
+  .preset-dock {
+    right: 15px;
+    gap: 8px;
+  }
+  .preset-dock > div:last-child {
+    gap: 8px;
+  }
+  .preset-dock button {
+    padding: 7px 9px;
+    gap: 8px;
+  }
+  .preset-dock .preset-selected {
+    display: none;
+  }
+  .preset-dock small {
+    font-size: 6px;
+  }
+  .mode-registry .registry-panel,
+  .mode-notices .coordination-list {
+    left: 85px;
+    top: 180px;
+    width: 240px;
+  }
+  .mode-registry .registry-detail,
+  .mode-notices .coordination-detail {
+    right: 15px;
+    width: 270px;
+  }
+  .report-workspace,
+  .legacy-view {
+    left: 70px;
+  }
+  .cinematic-gateway h1 {
+    font-size: 63px;
+  }
+  .cinematic-gateway .gateway-copy {
+    top: 12%;
+  }
+  .cinematic-gateway .gateway-copy > p {
+    font-size: 14px;
+  }
+  .frontier-timeline {
+    display: none;
+  }
+  .hero-bottom-deck {
+    gap: 12px;
+  }
+  .active-region-card {
+    min-width: 270px;
+    max-width: 300px;
+  }
+  .active-region-card > img {
+    width: 55px;
+    height: 60px;
+  }
+  .active-region-card > svg {
+    display: none;
+  }
+  .frontier-features > button {
+    flex-direction: column;
+    align-items: start;
+    gap: 7px;
+    padding: 0 12px;
+  }
+  .frontier-features small {
+    display: none;
+  }
+  .frontier-features {
+    padding: 14px 6px;
+  }
+  .frontier-features > button > span {
+    height: 31px;
+  }
+  .hero-proof > div {
+    padding-right: 20px;
+  }
+  .hero-proof span {
+    font-size: 5px;
+  }
+  .hero-proof strong {
+    font-size: 25px;
+  }
+  .cinematic-gateway .action-primary {
+    font-size: 11px;
+    gap: 20px;
+  }
+  .cinematic-gateway .gateway-actions {
+    gap: 16px;
+  }
+}
+@media (max-width: 750px) {
+  .mission-app {
+    grid-template-rows: 66px minmax(0, 1fr) 23px;
+  }
+  .flight-header {
+    padding: 0 13px;
+  }
+  .operational-nav {
+    display: none;
+  }
+  .operator-switch select {
+    max-width: 155px;
+  }
+  .flight-brand > span {
+    font-size: 20px;
+  }
+  .flight-brand img {
+    width: 34px;
+    height: 34px;
+  }
+  .subscription-badge {
+    font-size: 6px;
+  }
+  .public-nav {
+    gap: 20px;
+  }
+  .public-nav button {
+    font-size: 10px;
+  }
+  .public-nav button:last-child {
+    padding: 8px 15px;
+  }
+  .scene-heading {
+    top: 23px;
+  }
+  .scene-heading h1 {
+    font-size: 28px;
+  }
+  .scene-eyebrow {
+    font-size: 6px;
+  }
+  .view-controls {
+    top: 90px;
+    right: 15px;
+  }
+  .view-controls button {
+    padding: 7px;
+  }
+  .view-controls button span {
+    display: none;
+  }
+  .spatial-toolbar {
+    top: 134px;
+    right: 15px;
+  }
+  .asset-search {
+    min-width: 190px;
+    width: 60%;
+    height: 37px;
+  }
+  .layer-popover,
+  .scene-style-switch {
+    height: 37px;
+  }
+  .layer-popover summary {
+    height: 35px;
+  }
+  .scene-style-switch > button {
+    padding: 0 7px;
+  }
+  .scene-style-switch > button:nth-child(n + 3) {
+    display: none;
+  }
+  .exposure-panel {
+    left: auto;
+    right: 15px;
+    top: auto;
+    bottom: 239px;
+    max-height: 31%;
+    width: 255px;
+  }
+  .workspace-dock {
+    bottom: 103px;
+    height: 121px;
+  }
+  .selected-context {
+    display: none;
+  }
+  .quick-actions {
+    width: 100%;
+    height: 121px;
+  }
+  .quick-actions > div {
+    margin-top: 9px;
+  }
+  .quick-actions button {
+    height: 74px;
+  }
+  .viewpoint-strip {
+    height: 77px;
+    bottom: 14px;
+  }
+  .viewpoint-card:nth-of-type(3),
+  .viewpoint-card:nth-of-type(4) {
+    display: none;
+  }
+  .viewpoint-card strong {
+    font-size: 10px;
+  }
+  .viewpoint-card small {
+    font-size: 5px;
+  }
+  .viewpoint-number {
+    font-size: 6px;
+  }
+  .tour-control {
+    min-width: 112px;
+  }
+  .map-legend {
+    display: none;
+  }
+  .command-overview {
+    left: 95px;
+    right: auto;
+    bottom: 252px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 180px;
+  }
+  .command-overview > div,
+  .command-overview > button {
+    padding: 7px 10px;
+    border: 0 !important;
+  }
+  .command-overview strong {
+    font-size: 15px;
+  }
+  .command-overview span {
+    font-size: 5px;
+  }
+  .scene-help {
+    display: none;
+  }
+  .mode-setup .configuration {
+    top: 167px;
+    bottom: 133px;
+    width: 255px;
+    max-height: none;
+  }
+  .mode-setup .scene-heading {
+    top: 25px;
+    left: 95px;
+  }
+  .mode-setup .scene-heading h1 {
+    font-size: 30px;
+    max-width: 380px;
+  }
+  .mode-setup .view-controls {
+    top: 120px;
+    right: 15px;
+  }
+  .mode-setup .lander-annotation {
+    display: none;
+  }
+  .mode-setup .persistent-scene {
+    opacity: 0.8;
+  }
+  .preset-dock {
+    height: 105px;
+    padding: 12px;
+    bottom: 15px;
+  }
+  .preset-dock button > svg {
+    display: none;
+  }
+  .preset-dock button > span:not(.preset-selected) {
+    font-size: 8px;
+  }
+  .preset-dock small {
+    font-size: 5px;
+  }
+  .preset-dock > .dock-eyebrow > span {
+    display: none;
+  }
+  .mode-simulation .exposure-panel,
+  .mode-replay .exposure-panel {
+    bottom: 170px;
+    max-height: 40%;
+  }
+  .mode-simulation .timeline-panel,
+  .mode-replay .timeline-panel {
+    left: 85px;
+    right: 15px;
+    bottom: 25px;
+    padding: 13px;
+  }
+  .timeline-heading > small {
+    display: none;
+  }
+  .phase-labels button {
+    font-size: 6px;
+  }
+  .timeline-controls {
+    gap: 8px;
+  }
+  .mode-registry .registry-panel,
+  .mode-notices .coordination-list {
+    left: 85px;
+    top: 183px;
+    bottom: 240px;
+    width: 230px;
+    max-height: none;
+  }
+  .mode-registry .registry-detail,
+  .mode-notices .coordination-detail {
+    top: auto;
+    bottom: 240px;
+    width: 235px;
+    max-height: 36%;
+  }
+  .mode-notices .coordination-list {
+    bottom: 24px;
+  }
+  .mode-notices .coordination-detail {
+    bottom: 24px;
+  }
+  .cinematic-gateway .gateway-copy {
+    left: 6%;
+    top: 10%;
+    max-width: 88%;
+  }
+  .cinematic-gateway h1 {
+    font-size: 57px;
+  }
+  .cinematic-gateway h1 > span {
+    white-space: normal;
+  }
+  .cinematic-gateway .gateway-copy > p {
+    font-size: 13px;
+  }
+  .cinematic-gateway .eyeline {
+    font-size: 7px;
+    letter-spacing: 0.12em;
+  }
+  .hero-environment {
+    background-position: 66% 60%;
+    opacity: 0.8;
+  }
+  .hero-vignette {
+    background:
+      linear-gradient(90deg, #02070de8, #02070d22),
+      linear-gradient(0deg, #02070de8, transparent 65%);
+  }
+  .hero-proof {
+    gap: 18px;
+    margin-top: 29px;
+  }
+  .hero-proof strong {
+    font-size: 25px;
+  }
+  .hero-proof span {
+    font-size: 5px;
+    max-width: 95px;
+    line-height: 1.8;
+  }
+  .hero-proof > div {
+    padding-right: 18px;
+  }
+  .hero-bottom-deck {
+    left: 5%;
+    right: 5%;
+    bottom: 45px;
+  }
+  .active-region-card {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    padding: 12px;
+  }
+  .active-region-card > img {
+    height: 62px;
+    width: 75px;
+  }
+  .active-region-card strong {
+    font-size: 19px;
+  }
+  .active-region-card em {
+    font-size: 9px;
+  }
+  .frontier-features {
+    display: none;
+  }
+  .hero-art-caption {
+    font-size: 5px;
+    bottom: 18px;
+    gap: 9px;
+  }
+  .hero-art-caption > span {
+    width: 15px;
+  }
+  .cinematic-gateway .gateway-actions {
+    gap: 13px;
+  }
+  .cinematic-gateway .action-primary {
+    font-size: 10px;
+    padding: 13px 20px;
+  }
+  .watch-demo {
+    font-size: 10px;
+    padding: 11px 15px;
+  }
+  .orbital-flow {
+    opacity: 0.4;
+  }
+}
+@media (max-width: 500px) {
+  .mission-rail {
+    width: 53px;
+  }
+  .mission-rail button span {
+    font-size: 6px;
+  }
+  .mission-rail .rail-top > button:not(.rail-region-card) {
+    height: 56px;
+  }
+  .rail-index {
+    font-size: 5px;
+  }
+  .mission-rail .rail-bottom > button {
+    height: 41px;
+  }
+  .scene-heading,
+  .mode-registry .scene-heading,
+  .mode-notices .scene-heading {
+    left: 69px;
+    top: 20px;
+  }
+  .scene-heading h1 {
+    font-size: 25px;
+  }
+  .scene-eyebrow {
+    font-size: 5px;
+  }
+  .scene-heading p {
+    font-size: 5px;
+  }
+  .spatial-toolbar {
+    left: 68px;
+    top: 135px;
+    gap: 7px;
+  }
+  .asset-search {
+    min-width: 0;
+    width: auto;
+    flex: 1;
+    padding: 8px 10px;
+  }
+  .asset-search > input {
+    font-size: 8px;
+  }
+  .layer-popover {
+    display: none;
+  }
+  .scene-style-switch > button {
+    padding: 0 7px;
+  }
+  .scene-style-switch > button svg {
+    width: 13px;
+  }
+  .scene-style-switch > button:nth-child(2) {
+    display: none;
+  }
+  .view-controls {
+    top: 91px;
+    right: 13px;
+  }
+  .view-controls button {
+    padding: 6px;
+  }
+  .exposure-panel {
+    left: 68px;
+    right: 12px;
+    bottom: 229px;
+    width: auto;
+    max-height: 30%;
+    border-radius: 9px;
+  }
+  .exposure-panel .panel-content {
+    padding: 12px 15px;
+  }
+  .exposure-panel .panel-header {
+    font-size: 8px;
+    padding: 12px 15px;
+    min-height: 36px;
+  }
+  .exposure-panel .hero-metric {
+    font-size: 34px;
+  }
+  .exposure-panel .panel-section {
+    padding: 14px;
+  }
+  .metric-caption {
+    font-size: 7px;
+  }
+  .mini-metrics {
+    margin: 12px 0;
+  }
+  .mini-metrics strong {
+    font-size: 20px;
+  }
+  .workspace-dock,
+  .viewpoint-strip,
+  .preset-dock {
+    left: 68px;
+    right: 12px;
+  }
+  .workspace-dock {
+    bottom: 100px;
+    height: 114px;
+  }
+  .quick-actions {
+    padding: 11px;
+    height: 114px;
+  }
+  .quick-actions button {
+    height: 67px;
+    font-size: 7px;
+    gap: 7px;
+  }
+  .quick-actions button svg {
+    width: 19px;
+  }
+  .quick-actions button span {
+    font-size: 7px;
+  }
+  .quick-actions > div {
+    gap: 6px;
+  }
+  .viewpoint-strip {
+    gap: 6px;
+    height: 74px;
+    padding: 7px;
+  }
+  .viewpoint-card {
+    padding: 7px 9px;
+  }
+  .viewpoint-card:nth-of-type(2) {
+    display: none;
+  }
+  .viewpoint-card strong {
+    font-size: 9px;
+  }
+  .tour-control {
+    min-width: 101px;
+  }
+  .tour-control > span {
+    font-size: 6px;
+  }
+  .tour-control > small {
+    font-size: 6px;
+  }
+  .command-overview {
+    display: none;
+  }
+  .mode-setup .scene-heading {
+    left: 70px;
+    top: 20px;
+  }
+  .mode-setup .scene-heading h1 {
+    font-size: 27px;
+    max-width: 280px;
+  }
+  .mode-setup .view-controls {
+    top: 120px;
+    right: 12px;
+  }
+  .mode-setup .configuration {
+    left: 68px;
+    right: 12px;
+    top: 167px;
+    bottom: 131px;
+    width: auto;
+  }
+  .mode-setup .persistent-scene {
+    opacity: 0.45;
+  }
+  .preset-dock {
+    height: 100px;
+    padding: 10px;
+  }
+  .preset-dock > div:last-child {
+    gap: 6px;
+    margin-top: 9px;
+  }
+  .preset-dock button {
+    padding: 7px 6px;
+    height: 53px;
+  }
+  .preset-dock button > span:not(.preset-selected) {
+    font-size: 7px;
+  }
+  .preset-dock small {
+    font-size: 4px;
+  }
+  .preset-dock > .dock-eyebrow {
+    font-size: 6px;
+  }
+  .mode-registry .registry-panel,
+  .mode-notices .coordination-list {
+    left: 68px;
+    right: 12px;
+    top: auto;
+    bottom: 235px;
+    width: auto;
+    max-height: 36%;
+  }
+  .mode-registry .registry-detail {
+    left: 68px;
+    right: 12px;
+    top: 185px;
+    bottom: auto;
+    width: auto;
+    max-height: 24%;
+  }
+  .mode-notices .coordination-list {
+    bottom: 20px;
+    max-height: 40%;
+  }
+  .mode-notices .coordination-detail {
+    left: 68px;
+    right: 12px;
+    top: 140px;
+    bottom: auto;
+    width: auto;
+    max-height: 32%;
+  }
+  .mode-registry .spatial-toolbar {
+    top: 135px;
+  }
+  .mode-simulation .timeline-panel,
+  .mode-replay .timeline-panel {
+    left: 68px;
+    right: 12px;
+    padding: 12px 10px;
+  }
+  .mode-simulation .exposure-panel,
+  .mode-replay .exposure-panel {
+    bottom: 166px;
+    max-height: 32%;
+  }
+  .timeline-heading {
+    font-size: 7px;
+    gap: 8px;
+  }
+  .timeline-time {
+    font-size: 8px;
+  }
+  .timeline-time em {
+    font-size: 6px;
+  }
+  .timeline-controls {
+    gap: 5px;
+  }
+  .phase-labels button {
+    font-size: 4px;
+  }
+  .timeline-controls .icon-button {
+    padding: 4px;
+  }
+  .report-workspace,
+  .legacy-view {
+    left: 53px;
+  }
+  .flight-footer {
+    font-size: 5px;
+  }
+  .hero-art-caption {
+    max-width: 90%;
+    flex-wrap: wrap;
+    line-height: 1.8;
+  }
+  .cinematic-gateway h1 {
+    font-size: 48px;
+  }
+  .cinematic-gateway .gateway-copy {
+    top: 10%;
+  }
+  .cinematic-gateway .gateway-copy > p {
+    font-size: 12px;
+  }
+  .cinematic-gateway .gateway-actions {
+    gap: 9px;
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .cinematic-gateway .action-primary {
+    font-size: 9px;
+    gap: 15px;
+    min-height: 45px;
+    padding: 12px 17px;
+  }
+  .watch-demo {
+    font-size: 9px;
+    padding: 10px 12px;
+  }
+  .watch-demo > span {
+    width: 18px;
+    height: 18px;
+  }
+  .watch-demo svg {
+    width: 11px;
+  }
+  .hero-proof {
+    gap: 12px;
+    margin-top: 25px;
+  }
+  .hero-proof strong {
+    font-size: 23px;
+  }
+  .hero-proof > div {
+    padding-right: 12px;
+  }
+  .hero-proof span {
+    font-size: 5px;
+    letter-spacing: 0.04em;
+    max-width: 82px;
+  }
+  .active-region-card > img {
+    width: 64px;
+    height: 57px;
+  }
+  .active-region-card strong {
+    font-size: 17px;
+  }
+  .active-region-card small {
+    font-size: 6px;
+  }
+  .active-region-card em {
+    font-size: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-environment,
+  .orbit-moving,
+  .art-orbit,
+  .cinematic-gateway h1,
+  .cinematic-gateway .gateway-copy > p,
+  .cinematic-gateway .gateway-actions,
+  .hero-proof,
+  .hero-bottom-deck {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  .viewpoint-card:hover,
+  .action-primary:hover {
+    transform: none !important;
+  }
+}
+@media (min-width: 1101px) {
+  .mode-operations .map-legend {
+    left: 245px;
+    right: auto;
+    bottom: 253px;
+    width: 205px;
+  }
+  .mode-operations .command-overview {
+    left: 470px;
+    right: auto;
+    bottom: 253px;
+  }
+  .mode-operations .scene-help {
+    bottom: 356px;
+  }
+}
+@media (min-width: 1101px) and (max-width: 1400px) {
+  .mode-operations .map-legend {
+    left: 210px;
+  }
+  .mode-operations .command-overview {
+    left: 435px;
+  }
+}
+@media print {
+  .operational-nav,
+  .workspace-dock,
+  .viewpoint-strip,
+  .preset-dock,
+  .spatial-toolbar,
+  .hero-environment {
+    display: none !important;
+  }
+  .report-workspace {
+    left: 0 !important;
+  }
+}

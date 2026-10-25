@@ -19,6 +19,19 @@ export default function Report() {
   const acting = useMission((s) => s.actingId),
     operators = useMission((s) => s.operators),
     plans = useMission((s) => s.plans);
+  const editing = useMission((s) => s.editingPlanId),
+    editingRevision = useMission((s) => s.editingRevision),
+    session = useMission((s) => s.session);
+  const parts = windowText.includes(" / ") ? windowText.split(" / ") : [];
+  const match = windowText.match(
+    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})[–-](\d{2}:\d{2}) UTC$/,
+  );
+  const start =
+      parts[0]?.slice(0, 16) ?? (match ? `${match[1]}T${match[2]}` : ""),
+    end = parts[1]?.slice(0, 16) ?? (match ? `${match[1]}T${match[3]}` : "");
+  function setWindow(a: string, b: string) {
+    useMission.setState({ window: `${a}:00Z / ${b}:00Z` });
+  }
   const baseline = opt?.target,
     changed =
       baseline &&
@@ -283,6 +296,22 @@ export default function Report() {
           </>
         )}
       </article>
+      {editing && (
+        <div className="panel-note">
+          Revising {editing} · previous revision {editingRevision}.{" "}
+          <button
+            className="action-text"
+            onClick={() =>
+              useMission.setState({
+                editingPlanId: null,
+                editingRevision: null,
+              })
+            }
+          >
+            START A SEPARATE PLAN
+          </button>
+        </div>
+      )}
       <div className="filing-panel">
         <div>
           <h3>Coordinate with your neighbors.</h3>
@@ -292,20 +321,41 @@ export default function Report() {
           </p>
         </div>
         <label className="form-label">
-          LANDING WINDOW
+          WINDOW START / UTC
           <input
-            value={windowText}
-            maxLength={80}
-            onChange={(e) => useMission.setState({ window: e.target.value })}
+            type="datetime-local"
+            aria-label="Window start UTC"
+            value={start}
+            onChange={(e) => setWindow(e.target.value, end)}
+          />
+        </label>
+        <label className="form-label">
+          WINDOW END / UTC
+          <input
+            type="datetime-local"
+            aria-label="Window end UTC"
+            value={end}
+            onChange={(e) => setWindow(start, e.target.value)}
           />
         </label>
         <button
           className="action-primary"
-          disabled={!assessment || !!busy || !name.trim() || !windowText.trim()}
+          disabled={
+            !assessment ||
+            !!busy ||
+            !name.trim() ||
+            !start ||
+            !end ||
+            !session?.permissions.includes("plans:write")
+          }
           onClick={() => void useMission.getState().filePlan()}
         >
           <Icon name="Radio" size={16} />
-          {busy === "submit" ? "FILING…" : "FILE COORDINATION PLAN"}
+          {busy === "submit"
+            ? "FILING…"
+            : editing
+              ? `FILE REVISION ${(editingRevision ?? 1) + 1}`
+              : "FILE COORDINATION PLAN"}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fmtMeur, RISK_COLOR } from "../api";
 import { useMission } from "../mission";
+import PlanHistory from "./PlanHistory";
 import { Icon } from "./Icon";
 
 export function CommandOverview() {
@@ -49,6 +50,7 @@ export default function Coordination() {
     plans = useMission((s) => s.plans),
     operators = useMission((s) => s.operators),
     error = useMission((s) => s.coordinationError);
+  const [historyPlanId, setHistoryPlanId] = useState<string | null>(null);
   const [box, setBox] = useState<"inbox" | "sent" | "plans">("inbox"),
     [selected, setSelected] = useState<string | null>(null),
     [reply, setReply] = useState(""),
@@ -56,6 +58,7 @@ export default function Coordination() {
     [actError, setActError] = useState<string | null>(null);
   useEffect(() => {
     setSelected(null);
+    setHistoryPlanId(null);
     setReply("");
     setActError(null);
     setBox(acting === "kestrel" ? "sent" : "inbox");
@@ -71,8 +74,21 @@ export default function Coordination() {
     plan = plans.find((p) => p.id === current?.plan_id);
   const siblings = notices.filter((n) => n.plan_id === current?.plan_id),
     responses = siblings.filter((n) => n.status !== "unread").length;
+  useEffect(() => {
+    if (current?.to_operator_id === acting && !current.read_at) {
+      void api
+        .readNotice(current.id)
+        .then(() => useMission.getState().refresh())
+        .catch((e) => setActError(String(e)));
+    }
+  }, [current?.id, acting]);
   async function respond(status: "acknowledged" | "objection") {
-    if (!current || current.to_operator_id !== acting) return;
+    if (
+      !current ||
+      current.to_operator_id !== acting ||
+      (current.revision ?? 1) !== (plan?.revision ?? 1)
+    )
+      return;
     setPending(true);
     setActError(null);
     try {
@@ -92,7 +108,12 @@ export default function Coordination() {
     if (!plan) return;
     useMission.getState().updateLander(plan.lander);
     useMission.getState().moveSite(plan.site);
-    useMission.setState({ missionName: plan.name, window: plan.window });
+    useMission.setState({
+      missionName: plan.name,
+      window: plan.window,
+      editingPlanId: plan.operator_id === acting ? plan.id : null,
+      editingRevision: plan.revision ?? 1,
+    });
     useMission.getState().focus("site");
     useMission
       .getState()
@@ -113,7 +134,8 @@ export default function Coordination() {
           <p className="panel-intro">
             {operators.find((o) => o.id === acting)?.name}
             <br />
-            Demo organization context · persistent backend records
+            Local demo session · server-enforced permissions · persistent
+            records
           </p>
           <div className="coordination-tabs">
             {(["inbox", "sent", "plans"] as const).map((t) => (
@@ -153,11 +175,14 @@ export default function Coordination() {
                 <button
                   key={p.id}
                   onClick={() => {
+                    setHistoryPlanId(p.id);
                     useMission.getState().updateLander(p.lander);
                     useMission.getState().moveSite(p.site);
                     useMission.setState({
                       missionName: p.name,
                       window: p.window,
+                      editingPlanId: p.id,
+                      editingRevision: p.revision ?? 1,
                     });
                     useMission.getState().focus("site");
                   }}
@@ -251,7 +276,8 @@ export default function Coordination() {
           <>
             <div className="panel-content">
               <span className="demo-config-label">
-                PERSISTED BACKEND NOTICE / {current.id}
+                PERSISTED BACKEND NOTICE / {current.id} / REVISION{" "}
+                {current.revision ?? 1}
               </span>
               <h2>{current.subject}</h2>
               <p className="panel-note">
@@ -302,7 +328,9 @@ export default function Coordination() {
                   <span>04</span>
                   <p>
                     Resolution
-                    <small>No plan-update or resolution endpoint</small>
+                    <small>
+                      {plan?.status} · current revision {plan?.revision ?? 1}
+                    </small>
                   </p>
                 </div>
               </div>
@@ -342,7 +370,7 @@ export default function Coordination() {
               {current.to_operator_id === acting ? (
                 <>
                   <label className="form-label">
-                    RESPONSE / OPTIONAL
+                    RESPONSE / REASON REQUIRED FOR OBJECTION
                     <textarea
                       maxLength={1000}
                       value={reply}
@@ -353,7 +381,13 @@ export default function Coordination() {
                   <div className="response-actions">
                     <button
                       className="outline-button"
-                      disabled={pending}
+                      disabled={
+                        pending ||
+                        !useMission
+                          .getState()
+                          .session?.permissions.includes("notices:respond") ||
+                        (current.revision ?? 1) !== (plan?.revision ?? 1)
+                      }
                       onClick={() => void respond("acknowledged")}
                     >
                       <Icon name="Check" size={14} />
@@ -361,7 +395,14 @@ export default function Coordination() {
                     </button>
                     <button
                       className="outline-button danger"
-                      disabled={pending}
+                      disabled={
+                        pending ||
+                        !reply.trim() ||
+                        !useMission
+                          .getState()
+                          .session?.permissions.includes("notices:respond") ||
+                        (current.revision ?? 1) !== (plan?.revision ?? 1)
+                      }
                       onClick={() => void respond("objection")}
                     >
                       <Icon name="Flag" size={14} />
@@ -392,16 +433,18 @@ export default function Coordination() {
                     <Icon name="ArrowRight" size={14} />
                   </button>
                   <p className="panel-note">
-                    Demo context switch, not secure authentication.
+                    Explicit local demo session; production SSO is not
+                    configured.
                   </p>
                 </>
               )}
             </div>
             <div className="panel-section">
               <p className="panel-note">
-                To propose mitigation, optimize the working draft and file a new
-                proposal. This backend cannot amend or link the old plan, close
-                objections, or mark a consultation resolved.
+                Revise the same plan to reassess and reconsult. Earlier
+                objections remain in the immutable history. Only
+                acknowledgements of the current revision can coordinate the
+                plan.
               </p>
               <button
                 className="action-text full"
@@ -411,7 +454,10 @@ export default function Coordination() {
                 <Icon name="ArrowRight" size={14} />
               </button>
             </div>
+            <PlanHistory planId={current.plan_id} />
           </>
+        ) : historyPlanId ? (
+          <PlanHistory planId={historyPlanId} />
         ) : (
           <div className="panel-content registry-empty">
             <Icon name="ShieldCheck" size={30} />
@@ -424,7 +470,9 @@ export default function Coordination() {
               <p>
                 Plan → Notify → Review → Respond
                 <br />
-                <span>Resolution requires a future backend capability.</span>
+                <span>
+                  Revisions → Reassessment → Reconsultation → Coordination.
+                </span>
               </p>
             </div>
           </div>

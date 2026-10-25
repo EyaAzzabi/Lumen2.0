@@ -10,3 +10,5 @@ frontend/artifacts/
 frontend/test-results/
 frontend/playwright-report/
 frontend/debug.log
+
+backend/.venv/

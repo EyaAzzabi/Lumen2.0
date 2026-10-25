@@ -34,6 +34,12 @@ Production/local presentation: build with `npm run build` in `frontend`, then st
 
 ## Navigation and actual capabilities
 
+### Cinematic surface redesign
+
+The updated gateway uses original illustrative artwork with pointer parallax, animated orbital flow, actual registry counts and a prominent Log in action. The operations workspace now has a full mission sidebar, infrastructure search, layer popover, real 3D / exposure / wireframe / ownership-link views, selected-asset action deck and viewpoint thumbnails. A user-controllable camera tour runs on mission entry and stops when the operator drags the scene. Reduced motion disables the tour and decorative animation.
+
+The terrain remains the backend's height field. Instanced regolith rocks, enhanced vehicle/habitat/solar/relay/rover geometry, locator rings and an illustrative Earth improve the environment without changing computed exposure. The hangar uses a labeled illustrative backplate behind a real rotating vehicle; parameter controls continue to use only the actual backend fields. Camera viewpoints refer to synthetic local terrain, not claims about named actual lunar craters.
+
 - Gateway: textured 3D Moon, official supplied mark, direct mission entry, pricing and demo access.
 - Mission setup: backend-supported thrust (kN), hover (s), dispersion (m), and local east/north coordinates (m). Mission name/window are used when filing. No invented mass or descent-speed input.
 - Operations: persistent terrain scene, actual assessment summary, asset exposure, shared infrastructure, registered organization/plan/action counts, layers and camera views.
@@ -107,3 +113,16 @@ Screenshots, a generated PDF, test results and traces are local ignored artifact
 ## Remaining production work
 
 Organization SSO, authorization, tenant isolation, immutable audits, billing, intake/CRM, plan amendment and formal resolution are not implemented by this backend. Neither the tier labels nor context selector provide those capabilities. Real DEM/CAD assets, validated physical models and representative hardware performance measurements are separate future work.
+
+
+## V2 contract update
+
+The cinematic design is preserved. Local demo switching now establishes an
+HttpOnly server session; permissions and ownership are checked by FastAPI.
+Production SSO, billing and public deployment remain unimplemented.
+The former no-revision/no-resolution limitations above describe V1 and are
+superseded by [PLUME_V2.md](PLUME_V2.md). The coordination panel now exposes
+immutable revisions, response/event history, current-registry reassessment and
+withdrawal. The report files a revision of its selected plan, with a separate
+new-plan action and structured UTC windows. The UI refreshes every10seconds
+while visible and idle, without external notification delivery.

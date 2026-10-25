@@ -2,60 +2,58 @@
 
 *One landing. Everyone's safety.* — IEEE Lumen 2.0 · Beyond 2030
 
-Every lunar landing blasts regolith outward at up to ~1.7 km/s; with no atmosphere, debris travels kilometres.
-As several operators crowd the lunar south pole, one operator's touchdown can damage another's solar arrays,
-telescopes or habitats. PLUME is a multi-operator SaaS that predicts each landing's ejecta footprint, prices the
-damage to every registered asset, finds a safer touchdown site and sends formal consultation notices
-(Artemis Accords §11, harmful interference) to affected operators.
+PLUME is an illustrative multi-operator lunar coordination prototype. A simplified
+ballistic ejecta model estimates damage to shared fictional infrastructure; a
+constrained optimizer compares sites. Operators can file, object, revise,
+reconsult and coordinate a plan with immutable assessment and response history.
+No flight clearance, experimentally validated accuracy or trained ML is claimed.
 
-## Run
+## Run locally
 
-The cinematic 3D frontend and multi-operator collaboration UI are documented in
-[the frontend guide](docs/FRONTEND.md). It includes configuration, API integration,
-the two-operator demonstration, testing, and explicit prototype limitations.
+Python 3.11+ and Node20+:
 
-Backend (Python 3.11):
-
-```bash
+```powershell
 cd backend
-pip install -r requirements.txt
-python -m uvicorn plume.api:app --port 8000
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+$env:PLUME_DEMO_AUTH='true'
+.\.venv\Scripts\python.exe -m uvicorn plume.api:app --host 127.0.0.1 --port 8001
 ```
 
-Frontend (Node 20+), dev mode with hot reload (proxies `/api` to port 8000):
+In another terminal:
 
-```bash
+```powershell
 cd frontend
-npm install
-npm run dev          # http://localhost:5173
+npm ci
+$env:PLUME_API_TARGET='http://127.0.0.1:8001'
+npm run dev -- --host localhost --port 5174 --strictPort
 ```
 
-Demo mode: `npm run build` in `frontend/`, then the backend serves the built app at http://127.0.0.1:8000.
+Open http://localhost:5174. Without PLUME_DEMO_AUTH=true no demo identity is
+available. Demo sessions are direct-loopback only and server-authorized; they are
+not production SSO. PLUME_ENV=production refuses startup until a real identity
+provider adapter exists. Do not expose the local demo through a public proxy.
 
-Optional: set `ANTHROPIC_API_KEY` before starting the backend to have the copilot briefing written by Claude.
-Without it, a deterministic template is used and everything else works offline.
+The first V2 startup safely imports state.json into transactional SQLite after
+validating a temporary copy and backing up the source. Original JSON, IDs and
+history are preserved. No public reset endpoint exists.
 
-## Architecture
+## Documentation
 
-| Module | Role |
-|---|---|
-| `backend/plume/terrain.py` | Synthetic south-pole heightmap (demo data), elevation/slope lookup, terrain profiles, hillshade |
-| `backend/plume/physics.py` | Ejecta model: erosion ∝ thrust × hover, 4 grain classes, ballistic arcs in lunar gravity, terrain blocking |
-| `backend/plume/damage.py` | Erosion / impact / dust-coating damage per asset type, averaged over landing dispersion |
-| `backend/plume/planner.py` | Footprint heat map, risk assessment, two-stage landing-site optimiser |
-| `backend/plume/copilot.py` | Claude briefing (explains physics numbers, never computes them) + consultation notices |
-| `backend/plume/store.py` | JSON registry: operators, assets, landing plans, notices (fictional demo data) |
-| `backend/plume/api.py` | FastAPI endpoints |
-| `frontend/src` | React app: Mission Planner (map), Notices, Registry, Method |
+- [V2 engineering guide](docs/PLUME_V2.md): architecture, API inventory, data model,
+  migration/rollback, identity, state machine, assumptions, benchmarks and demo.
+- [Frontend guide](docs/FRONTEND.md): cinematic Three.js UI and integration.
+- [Verification log](docs/VERIFICATION.md): actual checks and limitations.
 
-## Demo script
+## Reproducible example
 
-1. Mission Planner → super-heavy lander at the default site: FLO Optical Telescope is **critical** (~€14M expected loss).
-2. *Optimise touchdown site* → ~1,800 candidates screened, loss drops to ~€0.02M; *Adopt optimised site*.
-3. *Generate* the copilot briefing, then *File plan & notify affected operators*.
-4. Switch "Acting as" to Far Light Observatory → Notices → acknowledge or object.
+Seed terrain7; superheavy1800kN/30s/50m; E1500/N-1500; radius4km, cost2M€/km,
+slope8 degrees, clearance300m. Baseline modeled infrastructure loss:14.458010383M€.
+Original optimizer objective:6.783381280M€. V2 objective:6.587186951M€, comprising
+2.312657160M€ damage plus relocation cost. These are model outputs on fictional
+values, not validated real-world economic predictions. Timings and method are in
+the engineering guide.
 
-## Limitations
-
-Simplified, calibrated plume model (not CFD/DSMC); flat-Moon ballistics; engineering-estimate damage sensitivities;
-synthetic terrain. All organisations, assets and values are fictional.
+Optional Anthropic briefing uses ANTHROPIC_API_KEY and PLUME_LLM_MODEL. Without a
+credential, a labeled deterministic template works immediately offline. The
+numerical engine never depends on an LLM. No trained surrogate is implemented.

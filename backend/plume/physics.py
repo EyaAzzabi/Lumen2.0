@@ -1,18 +1,17 @@
 """Reference physics model of rocket-plume ejecta on the Moon.
 
-This is the slow "ground truth" that the AI surrogate learns from.
+Deterministic illustrative numerical model; no trained surrogate is implemented.
 
 Model (deliberately simple, every assumption is explicit):
 - During the final low-altitude phase the engine erodes regolith at a rate
-  proportional to thrust (calibrated so an Apollo-class lander, 15 kN for
-  60 s, erodes ~2 t, the order of magnitude measured for Apollo and
-  Chandrayaan-3).
+  proportional to thrust (illustrative reference: 15 kN for 60 s gives
+  1.98 t; this repository contains no empirical calibration dataset).
 - Eroded mass splits into four size classes. Each class leaves the surface
   at a shallow angle (1-12 deg) with a log-normal speed distribution; smaller
   grains are dragged to higher speeds by the gas.
 - No atmosphere: once ejected, grains fly on pure ballistic arcs under lunar
-  gravity (1.62 m/s^2) and keep their speed until impact. Grains faster than
-  lunar orbital speed (~1.68 km/s) never come back down.
+  gravity (1.62 m/s^2). The fluence uses launch-speed moments. A legacy
+  1.68 km/s truncation excludes faster grains; this is not an escape criterion.
 - Terrain between the landing site and a target blocks any trajectory that
   dips below the ground.
 
@@ -20,6 +19,7 @@ For a target (a vertical surface of height h at distance d) we integrate
 analytically over speed and numerically over launch angle, giving the mass and
 kinetic energy hitting each square metre of the target's exposed face.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -94,6 +94,9 @@ def exposure(lander: Lander, xs, zs, za, d, height, n_theta: int = 32):
     e_coarse = np.zeros_like(d)
     m_total = np.zeros_like(d)
     for c in SIZE_CLASSES:
+        from .budget import check
+
+        check()
         mass = lander.eroded_mass_kg * c.mass_fraction
         mu = np.log(c.v_median * lander.speed_scale)
         theta = np.radians(
@@ -110,7 +113,9 @@ def exposure(lander: Lander, xs, zs, za, d, height, n_theta: int = 32):
             gap_lo = rise - za[:, None]
             gap_hi = rise - (za + h)[:, None]
             v_lo = np.sqrt(G_MOON * dd**2 / (2 * cos2 * gap_lo))
-            v_hi = np.where(gap_hi > 0, np.sqrt(G_MOON * dd**2 / (2 * cos2 * gap_hi)), np.inf)
+            v_hi = np.where(
+                gap_hi > 0, np.sqrt(G_MOON * dd**2 / (2 * cos2 * gap_hi)), np.inf
+            )
         reachable = gap_lo > 0
         v_lo = np.where(reachable, v_lo, V_ORBIT)
         v_hi = np.minimum(v_hi, V_ORBIT)
@@ -121,12 +126,18 @@ def exposure(lander: Lander, xs, zs, za, d, height, n_theta: int = 32):
         # Terrain blocking, tested with a representative speed in the window.
         v_rep = np.sqrt(v_lo * v_hi)
         x = xs[:, None, :]
-        y = x * tan_t[..., None] - G_MOON * x**2 / (2 * v_rep[..., None] ** 2 * cos2[..., None])
+        y = x * tan_t[..., None] - G_MOON * x**2 / (
+            2 * v_rep[..., None] ** 2 * cos2[..., None]
+        )
         blocked = (y < zs[:, None, :] - 0.5).any(axis=-1)
         open_ = valid & ~blocked
 
-        p = np.where(open_, _partial_moment(0, mu, c.v_sigma, v_lo, v_hi), 0.0).mean(axis=1)
-        v2 = np.where(open_, _partial_moment(2, mu, c.v_sigma, v_lo, v_hi), 0.0).mean(axis=1)
+        p = np.where(open_, _partial_moment(0, mu, c.v_sigma, v_lo, v_hi), 0.0).mean(
+            axis=1
+        )
+        v2 = np.where(open_, _partial_moment(2, mu, c.v_sigma, v_lo, v_hi), 0.0).mean(
+            axis=1
+        )
         # Mass heading into the target's azimuth wedge, spread over its face.
         geom = mass / (2 * np.pi * d * h)
         m_flu = geom * p

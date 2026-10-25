@@ -20,6 +20,12 @@ import { Login, Pricing, SubscriptionInfo } from "./components/Commercial";
 import { RegistryPanel, RegistryDetail } from "./components/SharedRegistry";
 import Coordination, { CommandOverview } from "./components/Coordination";
 import { api } from "./api";
+import {
+  PresetDock,
+  QuickActions,
+  SpatialToolbar,
+  ViewpointStrip,
+} from "./components/SpatialWorkspace";
 const LunarScene = lazy(() => import("./scene/LunarScene"));
 const Method = lazy(() => import("./Method"));
 
@@ -112,8 +118,29 @@ function Header() {
             className={mode === "login" ? "active" : ""}
             onClick={() => useMission.getState().setMode("login")}
           >
-            Demo access <Icon name="ArrowRight" size={13} />
+            Log in <Icon name="ArrowRight" size={13} />
           </button>
+        </nav>
+      )}
+      {!publicMode && (
+        <nav className="operational-nav" aria-label="Operational navigation">
+          {(
+            [
+              ["operations", "Map"],
+              ["simulation", "Simulation"],
+              ["optimizer", "Optimizer"],
+              ["report", "Reports"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              className={mode === id ? "active" : ""}
+              aria-label={`Open ${label.toLowerCase()}`}
+              onClick={() => useMission.getState().setMode(id)}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
       )}
       <div className="header-right">
@@ -169,9 +196,31 @@ function Header() {
 
 function Rail() {
   const mode = useMission((s) => s.mode);
+  const name = useMission((s) => s.missionName),
+    site = useMission((s) => s.site),
+    assets = useMission((s) => s.assets),
+    acting = useMission((s) => s.actingId),
+    plans = useMission((s) => s.plans);
   return (
     <nav className="mission-rail" aria-label="Mission modes">
       <div className="rail-top">
+        <button
+          className="rail-region-card"
+          aria-label="Explore south pole region"
+          onClick={() => {
+            useMission.setState({ viewpoint: "colony", tour: false });
+            useMission.getState().setMode("operations");
+            useMission.getState().focus("overview");
+          }}
+        >
+          <div style={{ backgroundImage: "url('/lunar-hero.png')" }} />
+          <strong>South Pole Region</strong>
+          <small>Shared lunar neighborhood</small>
+          <span>
+            <span className="status-dot" />
+            SYNTHETIC EXPLORATION ZONE
+          </span>
+        </button>
         <span className="rail-index">MISSION</span>
         {navigation.map(([id, label, icon]) => (
           <button
@@ -187,6 +236,22 @@ function Rail() {
             {mode === id && <i />}
           </button>
         ))}
+      </div>
+      <div className="rail-mission-card">
+        <span>CURRENT MISSION</span>
+        <strong>{name}</strong>
+        <small>
+          E {(site.x / 1000).toFixed(2)} / N {(site.y / 1000).toFixed(2)} km
+        </small>
+        <div>
+          <span>{assets.length} shared assets</span>
+          <span>
+            {plans.filter((p) => p.operator_id === acting).length} filed plans
+          </span>
+        </div>
+        <button onClick={() => useMission.getState().setMode("setup")}>
+          Configure mission <Icon name="ArrowRight" size={14} />
+        </button>
       </div>
       <div className="rail-bottom">
         {(
@@ -232,8 +297,8 @@ function GuidedDemo() {
     "Return to Kestrel to prepare mitigation.",
     "Search actual lower-cost landing candidates.",
     "Adopt the best feasible candidate.",
-    "File the revised draft as a new proposal.",
-    "Review responses. Original objections remain open.",
+    "File a new revision of the original plan.",
+    "Review the revised consultation. Original objections remain in history.",
   ];
   const labels = [
     "SIMULATE",
@@ -281,7 +346,7 @@ function GuidedDemo() {
       s.setMode("notices");
     } else if (step === 3) {
       if (!s.demoRecipient) return;
-      s.switchOperator(s.demoRecipient);
+      await s.switchOperator(s.demoRecipient);
       s.setMode("notices");
       useMission.setState({ demoStep: 4 });
     } else if (step === 4) {
@@ -301,7 +366,7 @@ function GuidedDemo() {
         useMission.setState({ error: String(e) });
       }
     } else if (step === 5) {
-      s.switchOperator("kestrel");
+      await s.switchOperator("kestrel");
       s.setMode("optimizer");
       useMission.setState({ demoStep: 6 });
     } else if (step === 6) {
@@ -317,6 +382,11 @@ function GuidedDemo() {
     } else if (step === 8) {
       useMission.setState({
         missionName: `${s.missionName.replace(/ · revised$/, "")} · revised`,
+      });
+      useMission.setState({
+        editingPlanId: s.demoPlanId,
+        editingRevision:
+          s.plans.find((p) => p.id === s.demoPlanId)?.revision ?? 1,
       });
       const planId = await useMission.getState().filePlan();
       if (planId) {
@@ -381,7 +451,14 @@ export default function App() {
       "registry",
       "method",
     ];
-    if (modes.includes(initial)) useMission.setState({ mode: initial as Mode });
+    if (modes.includes(initial)) useMission.getState().setMode(initial as Mode);
+    const navigate = () => {
+      const next = location.hash.slice(1);
+      if (modes.includes(next) && useMission.getState().mode !== next)
+        useMission.getState().setMode(next as Mode);
+    };
+    window.addEventListener("hashchange", navigate);
+    return () => window.removeEventListener("hashchange", navigate);
   }, []);
   useEffect(() => {
     if (!connected) return;
@@ -398,12 +475,23 @@ export default function App() {
     window.addEventListener("keydown", escape);
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     const change = () =>
-      useMission.setState({ reducedMotion: media.matches, playing: false });
+      useMission.setState({
+        reducedMotion: media.matches,
+        playing: false,
+        tour: false,
+      });
     media.addEventListener("change", change);
     return () => {
       window.removeEventListener("keydown", escape);
       media.removeEventListener("change", change);
     };
+  }, []);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && !useMission.getState().busy)
+        void useMission.getState().refresh();
+    }, 10000);
+    return () => clearInterval(timer);
   }, []);
   const legacy = mode === "method";
   const spatial =
@@ -436,6 +524,13 @@ export default function App() {
             {spatial && (
               <>
                 <SceneControls />
+                {[
+                  "operations",
+                  "simulation",
+                  "replay",
+                  "optimizer",
+                  "registry",
+                ].includes(mode) && <SpatialToolbar />}
                 {mode === "registry" ? (
                   <>
                     <RegistryPanel />
@@ -454,6 +549,13 @@ export default function App() {
                   </>
                 )}
                 {mode === "operations" && <CommandOverview />}
+                {["operations", "optimizer", "registry"].includes(mode) && (
+                  <>
+                    <QuickActions />
+                    <ViewpointStrip />
+                  </>
+                )}
+                {mode === "setup" && <PresetDock />}
                 {(mode === "simulation" || mode === "replay") && <Timeline />}
               </>
             )}

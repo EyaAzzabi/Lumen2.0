@@ -13,6 +13,7 @@ import {
   type Plan,
   type Pt,
   type TerrainMesh,
+  type Session,
 } from "./api";
 
 export type Mode =
@@ -50,6 +51,9 @@ export const phaseAt = (t: number) =>
 
 interface Mission {
   mode: Mode;
+  session: Session | null;
+  editingPlanId: string | null;
+  editingRevision: number | null;
   meta: Meta | null;
   terrain: TerrainMesh | null;
   assets: Asset[];
@@ -73,7 +77,7 @@ interface Mission {
   optimization: Optimization | null;
   brief: Brief | null;
   assessedAt: string | null;
-  busy: "analysis" | "optimizer" | "brief" | "submit" | null;
+  busy: "analysis" | "optimizer" | "brief" | "submit" | "session" | null;
   error: string | null;
   toast: string | null;
   refreshKey: number;
@@ -81,6 +85,9 @@ interface Mission {
   placeMode: boolean;
   cameraView: CameraView;
   cameraTick: number;
+  viewpoint: string;
+  tour: boolean;
+  sceneStyle: "perspective" | "heatmap" | "wireframe" | "infrastructure";
   layers: Layers;
   lowGraphics: boolean;
   reducedMotion: boolean;
@@ -98,7 +105,7 @@ interface Mission {
   setMode: (mode: Mode) => void;
   load: () => Promise<void>;
   refresh: () => Promise<void>;
-  switchOperator: (id: string) => void;
+  switchOperator: (id: string) => Promise<void>;
   updateLander: (patch: Partial<LanderParams>, presetId?: string) => void;
   moveSite: (site: Pt, preserveOptimization?: boolean) => void;
   focus: (view: CameraView) => void;
@@ -114,6 +121,9 @@ interface Mission {
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
   mode: "gateway",
+  session: null,
+  editingPlanId: null,
+  editingRevision: null,
   meta: null,
   terrain: null,
   assets: [],
@@ -150,6 +160,9 @@ export const useMission = create<Mission>((set, get) => ({
   placeMode: false,
   cameraView: "overview",
   cameraTick: 0,
+  viewpoint: "colony",
+  tour: false,
+  sceneStyle: "perspective",
   layers: {
     terrain: true,
     infrastructure: true,
@@ -177,6 +190,10 @@ export const useMission = create<Mission>((set, get) => ({
     set({ mode, placeMode: false });
     history.replaceState(null, "", `#${mode}`);
     if (mode === "gateway") set({ playing: false });
+    if (mode === "operations" && previous === "gateway")
+      set({ tour: !get().reducedMotion, viewpoint: "colony" });
+    if (!["operations", "registry", "optimizer"].includes(mode))
+      set({ tour: false });
     if (mode === "setup") get().focus("lander");
     else if (previous === "gateway" || previous === "setup")
       get().focus("overview");
@@ -190,7 +207,11 @@ export const useMission = create<Mission>((set, get) => ({
         api.operators(),
       ]);
       set({ meta, assets, operators, connected: true });
-      void get().refresh();
+      let session = await api.session();
+      if (!session.authenticated && session.demo_enabled)
+        session = await api.demoSession("kestrel");
+      set({ session, actingId: session.organization_id ?? "kestrel" });
+      if (session.authenticated) void get().refresh();
     } catch (e) {
       set({
         connected: false,
@@ -207,6 +228,7 @@ export const useMission = create<Mission>((set, get) => ({
   },
   refresh: async () => {
     const actingId = get().actingId;
+    if (!get().session?.authenticated) return;
     try {
       const [assets, plans, notices] = await Promise.all([
         api.assets(),
@@ -240,21 +262,34 @@ export const useMission = create<Mission>((set, get) => ({
         });
     }
   },
-  switchOperator: (actingId) => {
-    set((s) => ({
-      actingId,
-      notices: [],
-      coordinationError: null,
-      selectedAsset: null,
-      registryFilter: {
-        ...s.registryFilter,
-        operator:
-          s.registryFilter.operator === s.actingId
-            ? actingId
-            : s.registryFilter.operator,
-      },
-    }));
-    void get().refresh();
+  switchOperator: async (actingId) => {
+    set({ busy: "session", coordinationError: null });
+    try {
+      const session = await api.demoSession(actingId);
+      set((s) => ({
+        session,
+        actingId: session.organization_id!,
+        notices: [],
+        plans: [],
+        selectedAsset: null,
+        editingPlanId: null,
+        editingRevision: null,
+        busy: null,
+        registryFilter: {
+          ...s.registryFilter,
+          operator:
+            s.registryFilter.operator === s.actingId
+              ? actingId
+              : s.registryFilter.operator,
+        },
+      }));
+      await get().refresh();
+    } catch (e) {
+      set({
+        busy: null,
+        coordinationError: `Session switch failed: ${String(e)}`,
+      });
+    }
   },
   updateLander: (patch, presetId = "custom") =>
     set((s) => ({
@@ -382,16 +417,30 @@ export const useMission = create<Mission>((set, get) => ({
   },
   filePlan: async () => {
     const { lander, site, actingId, missionName, window, revision } = get();
-    if (!get().assessment || !missionName.trim() || !window.trim()) return null;
+    if (
+      !get().assessment ||
+      !missionName.trim() ||
+      !window.trim() ||
+      !get().session?.permissions.includes("plans:write")
+    )
+      return null;
     set({ busy: "submit", error: null });
     try {
-      const r = await api.submitPlan({
+      const payload = {
         lander,
         site,
         operator_id: actingId,
         name: missionName,
         window,
-      });
+      };
+      const editing = get().editingPlanId;
+      const r = editing
+        ? await api.revisePlan(editing, {
+            ...payload,
+            expected_revision: get().editingRevision ?? 1,
+          })
+        : await api.submitPlan(payload);
+      set({ editingPlanId: r.plan.id, editingRevision: r.plan.revision ?? 1 });
       if (get().revision === revision) set({ busy: null });
       get().notify(
         `${r.plan.id} filed · ${r.notices_sent} consultation notice${r.notices_sent === 1 ? "" : "s"} created in the demo registry.`,

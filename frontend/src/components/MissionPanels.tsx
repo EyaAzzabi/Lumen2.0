@@ -273,14 +273,28 @@ export function ExposurePanel() {
             <dd>
               {result
                 ? result.shielded
-                  ? "Shielded in model"
-                  : "Not fully shielded"
+                  ? "Nominal exposure near zero"
+                  : "Nominal exposure nonzero"
                 : "—"}
             </dd>
             {result && (
               <>
                 <dt>Energy fluence</dt>
                 <dd>{result.energy_fluence_j_m2.toExponential(2)} J/m²</dd>
+                {result.uncertainty && (
+                  <>
+                    <dt>Damage sample q95 / worst</dt>
+                    <dd>
+                      {fmtPct(result.uncertainty.q95)} /{" "}
+                      {fmtPct(result.uncertainty.worst_sample_damage)}
+                    </dd>
+                    <dt>Valid samples / seed</dt>
+                    <dd>
+                      {result.uncertainty.valid_samples} /{" "}
+                      {result.uncertainty.seed}
+                    </dd>
+                  </>
+                )}
                 <dt>Fine dust</dt>
                 <dd>{result.dust_mass_g_m2.toFixed(2)} g/m²</dd>
               </>
@@ -484,6 +498,13 @@ export function OptimizerPanel() {
             ? "EVALUATING FEASIBLE SITES…"
             : "RUN OPTIMIZER"}
         </button>
+        {opt?.method && (
+          <p className="panel-note">
+            {opt.method.rescored} dispersion-aware evaluations ·{" "}
+            {opt.method.refined_count} local refinements. Best evaluated
+            objective; no global-optimum proof.
+          </p>
+        )}
         {busy === "optimizer" && (
           <p className="panel-note" role="status">
             Backend screening terrain and asset clearances, then rescoring
@@ -505,6 +526,13 @@ export function OptimizerPanel() {
                 <b>{(opt.compute_ms / 1000).toFixed(1)} s</b>compute
               </span>
             </div>
+            {opt.best_explanation && (
+              <p className="panel-note">
+                Selected by modeled loss + relocation cost. Nearest asset:{" "}
+                {fmtKm(opt.best_explanation.nearest_asset_m)}. Maximum asset
+                severity: {opt.best_explanation.worst_risk}.
+              </p>
+            )}
             <div className="baseline-loss">
               ORIGINAL MODELED LOSS{" "}
               <strong>{fmtMeur(opt.target.summary.expected_loss_meur)}</strong>
@@ -616,8 +644,8 @@ export function SceneControls() {
     assessment = useMission((s) => s.assessment),
     footprint = useMission((s) => s.footprint);
   const names = {
-    operations: "Lunar operations",
-    setup: "Spacecraft configuration",
+    operations: "South Pole Region",
+    setup: "Prepare your landing mission",
     simulation: "Landing simulation",
     replay: "Temporal replay",
     optimizer: "Landing intelligence",
@@ -659,7 +687,10 @@ export function SceneControls() {
             aria-label={label}
             aria-pressed={view === id}
             className={view === id ? "active" : ""}
-            onClick={() => useMission.getState().focus(id)}
+            onClick={() => {
+              useMission.setState({ tour: false });
+              useMission.getState().focus(id);
+            }}
           >
             <Icon name={icon} size={17} />
             <span>{label}</span>

@@ -34,4 +34,44 @@ The offline briefing path was exercised. A live Anthropic-backed briefing was no
 
 The orbital Moon visual uses the credited NASA SVS CGI Moon Kit color map; source details are in `frontend/public/ASSETS.md`. This does not alter the local simulation terrain or imply NASA endorsement.
 
-Changes are local. No Git commit, push, hosting registration or deployment was performed.
+The original frontend was committed and pushed previously. The cinematic redesign described below remains local and uncommitted.
+
+## Cinematic redesign verification — 2026-10-25
+
+- Production TypeScript/Vite build passed after the final scene changes. The lazy scene chunk is about 912 kB uncompressed / 248 kB gzip; Vite retains its large-chunk advisory.
+- Backend contract suite: **7 passed**. Complete browser suite: **8 passed** in 4.1 minutes, including all seven existing workflows.
+- The added browser scenario checks moving rendered frames, tour pause, viewpoint selection, infrastructure search, scene styles, layer visibility and same-page login navigation.
+- After the final hangar transparency, rock shading and style/layer refinements, the cinematic browser scenario passed again. Updated 1920×1080 map and hangar screenshots were visually reviewed.
+- The complete suite also checks reduced motion, mobile overflow and WebGL fallback. No browser runtime errors occurred in the added cinematic scenario.
+- Generated hero and hangar artwork are illustrative. Operational terrain, assessment, footprints and optimizer results still come from the existing backend. The interactive geometry is stylized and is not engineering CAD.
+- `git diff --check` passed. Preview runs on localhost:5174 with the real demo backend on port 8001. Browser tests use the separate temporary registry on port 8002.
+
+## PLUME V2 verification — 2026-10-25
+
+- Baseline before V2: seven backend tests passed.
+- Current backend: **27 tests passed** using the project virtual environment.
+  Coverage includes migration preservation/idempotency, foreign keys, rollback,
+  concurrent writes/responses, immutable history, online backup, authorization,
+  CSRF, production fail-closed configuration, numerical consistency, optimizer
+  regression, UTC windows and the complete revision lifecycle after reopening DB.
+- Production TypeScript/Vite build passed; the lazy Three.js bundle remains about
+  912kB uncompressed/248kB gzip with Vite's large-chunk advisory.
+- Anthropic SDK1.17.0 installed in backend/.venv; stable messages.create signature
+  inspected without a network generation or real credential. Template and numeric
+  guard paths tested with a mocked provider. Live generation is not verified.
+- Original local JSON migration verified:6 organizations,7 assets,4 plans,4 notices.
+  Source and verified hash-named backup retained. SQLite schema versions1and2.
+- The first browser pass found one actual briefing serialization regression and
+  one obsolete V1 copy assertion:6 passed,2 failed. Coordinates are now serialized
+  as x/y only; the assertion now checks retained history. Final browser results
+  are recorded in the V2 engineering report once that run completes.
+- A direct same-origin session through localhost:5174 was checked successfully
+  after configuring Vite to preserve Host, without weakening backend origin rules.
+- Scientific tests check software consistency, NOT empirical physical validation.
+
+Final V2 browser rerun: **9 passed in6.3minutes**, including full same-plan revision
+and retained-objection UI acceptance. SQLite integrity=ok,zero FK violations;
+source JSON hash unchanged. TypeScript and selected Prettier checks passed.
+A real Uvicorn process restart was also exercised with an isolated SQLite fixture:
+coordinated plan, both revisions, old objection, event/snapshot payloads and demo
+session survived, with the complete plan-detail response unchanged.
