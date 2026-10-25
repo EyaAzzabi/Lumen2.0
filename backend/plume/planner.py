@@ -10,6 +10,7 @@ from .damage import ASSET_TYPES, assess_assets, damage_fraction, landing_samples
 from .physics import Lander, exposure
 from .terrain import HALF
 from .provenance import provenance
+from .coordination import evaluate
 
 REFERENCE_TYPE = ASSET_TYPES["solar_array"]
 CHUNK = 1_500
@@ -141,10 +142,15 @@ def optimize(
     clearance_m: float = 300.0,
     strategy: str = "improved",
     dispersion_margin_sigma: float = 0.0,
+    constraints: list[dict] | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     if strategy not in ("baseline", "improved"):
         raise ValueError("Unknown optimizer strategy")
+    constraints = constraints or []
+    if any(c["asset_id"] not in {a["id"] for a in assets} for c in constraints):
+        raise ValueError("Constraint references an unavailable asset")
+    rejected = []
     effective_clearance = clearance_m + dispersion_margin_sigma * dispersion_m
     step = search_radius_m / 24
     g = np.arange(-search_radius_m, search_radius_m + 1e-6, step)
@@ -158,7 +164,14 @@ def optimize(
     near = np.zeros_like(cx, dtype=bool)
     for a in assets:
         near |= np.hypot(cx - a["x"], cy - a["y"]) < effective_clearance
-    feasible = (slope <= max_slope_deg) & ~near
+    separation_rejected = np.zeros_like(cx, dtype=bool)
+    for rule in constraints:
+        if rule.get("min_separation_m") is not None:
+            a = next(a for a in assets if a["id"] == rule["asset_id"])
+            separation_rejected |= (
+                np.hypot(cx - a["x"], cy - a["y"]) < rule["min_separation_m"]
+            )
+    feasible = (slope <= max_slope_deg) & ~near & ~separation_rejected
 
     # Stage 1: screen every candidate at its nominal touchdown point.
     loss = np.zeros_like(cx)
@@ -178,13 +191,35 @@ def optimize(
     cost = np.where(feasible, loss + traverse, np.inf)
 
     # Stage 2: re-score the best few including landing dispersion.
-    order = np.argsort(cost)[: (8 if strategy == "baseline" else 32)]
+    order = np.argsort(cost)[
+        : (128 if constraints else (8 if strategy == "baseline" else 32))
+    ]
     shortlist = []
     for i in order:
         if not np.isfinite(cost[i]):
             break
         res = assess_assets(terrain, lander, dispersion_m, cx[i], cy[i], assets)
+        checks = evaluate(res, float(cx[i]), float(cy[i]), assets, constraints)
         s = _summary(res)
+        if not checks["satisfied"]:
+            rejected.append(
+                {
+                    "x": float(cx[i]),
+                    "y": float(cy[i]),
+                    "slope_deg": float(slope[i]),
+                    "distance_from_target_m": float(
+                        np.hypot(cx[i] - target_x, cy[i] - target_y)
+                    ),
+                    "expected_loss_meur": s["expected_loss_meur"],
+                    "traverse_meur": float(traverse[i]),
+                    "total_cost_meur": s["expected_loss_meur"] + float(traverse[i]),
+                    "assets": res,
+                    "constraint_evaluation": checks,
+                    "feasible": False,
+                    "reason": "Fails user-negotiated modeled limits",
+                }
+            )
+            continue
         shortlist.append(
             {
                 "x": float(cx[i]),
@@ -200,6 +235,9 @@ def optimize(
                     (float(np.hypot(cx[i] - a["x"], cy[i] - a["y"])) for a in assets),
                     default=None,
                 ),
+                "assets": res,
+                "constraint_evaluation": checks,
+                "feasible": True,
                 "worst_risk": s["worst_risk"],
                 "worst_damage_fraction": max(
                     (r["damage_fraction"] for r in res), default=0.0
@@ -249,6 +287,9 @@ def optimize(
                 ):
                     continue
                 res = assess_assets(terrain, lander, dispersion_m, x, y, assets)
+                checks = evaluate(res, x, y, assets, constraints)
+                if not checks["satisfied"]:
+                    continue
                 summary = _summary(res)
                 travel = moved / 1000 * traverse_meur_per_km
                 shortlist.append(
@@ -266,6 +307,9 @@ def optimize(
                             (r["damage_fraction"] for r in res), default=0.0
                         ),
                         "assets_at_risk": summary["assets_at_risk"],
+                        "assets": res,
+                        "constraint_evaluation": checks,
+                        "feasible": True,
                         "explanation": {
                             **anchor["explanation"],
                             "local_refinement_step_m": step / 3,
@@ -311,6 +355,21 @@ def optimize(
         )
     ]
     return {
+        "constraints": constraints,
+        "constraint_status": (
+            "feasible_evaluated_site" if best else "no_feasible_evaluated_site"
+        ),
+        "baseline_constraint_evaluation": evaluate(
+            baseline["assets"], target_x, target_y, assets, constraints
+        ),
+        "near_misses": sorted(
+            rejected,
+            key=lambda c: (
+                c["constraint_evaluation"]["violation_score"],
+                c["total_cost_meur"],
+            ),
+        )[:5],
+        "constraint_scope": "No global feasibility or optimality claim; evaluated shortlist only",
         "target": baseline,
         "best": best,
         "best_traverse_meur": shortlist[0]["traverse_meur"] if shortlist else None,
@@ -331,13 +390,16 @@ def optimize(
                 "slope": int((slope > max_slope_deg).sum()),
                 "clearance": int(near.sum()),
                 "combined_infeasible": int((~feasible).sum()),
+                "requested_separation": int(separation_rejected.sum()),
+                "modeled_damage_evaluated": len(rejected),
             },
             "rejections": [
                 {
                     "x": float(cx[i]),
                     "y": float(cy[i]),
                     "violations": (["slope"] if slope[i] > max_slope_deg else [])
-                    + (["clearance"] if near[i] else []),
+                    + (["clearance"] if near[i] else [])
+                    + (["requested_separation"] if separation_rejected[i] else []),
                 }
                 for i in np.flatnonzero(~feasible)
             ],

@@ -115,6 +115,9 @@ export interface Footprint {
   metadata?: Record<string, unknown>;
 }
 export interface Alternative {
+  constraint_evaluation?: ConstraintEvaluation;
+  assets?: Assessment["assets"];
+  feasible?: boolean;
   worst_risk: Risk;
   worst_damage_fraction: number;
   assets_at_risk: number;
@@ -127,7 +130,35 @@ export interface Alternative {
   distance_from_target_m: number;
   slope_deg: number;
 }
+export interface ObjectionConstraint {
+  asset_id: string;
+  reason: string;
+  max_damage_fraction: number | null;
+  min_separation_m: number | null;
+  source_notice_id?: string;
+  source_revision?: number;
+}
+export interface ConstraintEvaluation {
+  satisfied: boolean;
+  metric: string;
+  checks: (ObjectionConstraint & {
+    satisfied: boolean;
+    actual_damage_fraction: number | null;
+    actual_distance_m: number | null;
+    violations: string[];
+  })[];
+  violation_score: number;
+}
 export interface Optimization {
+  run_id?: string;
+  constraints: ObjectionConstraint[];
+  constraint_status: string;
+  constraint_scope: string;
+  baseline_constraint_evaluation: ConstraintEvaluation;
+  near_misses: (Alternative & {
+    constraint_evaluation: ConstraintEvaluation;
+    reason: string;
+  })[];
   target: Assessment;
   best: Assessment | null;
   best_traverse_meur: number | null;
@@ -170,6 +201,7 @@ export interface Plan {
   window_end?: string;
 }
 export interface Notice {
+  constraints?: ObjectionConstraint[];
   id: string;
   plan_id: string;
   from_operator_id: string;
@@ -482,8 +514,11 @@ export const api = {
     post<Assessment>("/api/assess", { lander, site }),
   footprint: (lander: LanderParams, site: Pt) =>
     post<Footprint>("/api/footprint", { lander, site }),
-  optimize: (lander: LanderParams, site: Pt, opts: Record<string, number>) =>
-    post<Optimization>("/api/optimize", { lander, site, ...opts }),
+  optimize: (
+    lander: LanderParams,
+    site: Pt,
+    opts: Record<string, number | string | null>,
+  ) => post<Optimization>("/api/optimize", { lander, site, ...opts }),
   brief: (lander: LanderParams, site: Pt, optimized_site: Pt | null) =>
     post<Brief>("/api/copilot/brief", {
       lander,
@@ -506,10 +541,11 @@ export const api = {
     id: string,
     status: "acknowledged" | "objection",
     reply?: string,
+    constraints: ObjectionConstraint[] = [],
   ) =>
     req<Notice>(`/api/notices/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status, reply }),
+      body: JSON.stringify({ status, reply, constraints }),
     }),
   curves: () => req<Curves>("/api/curves"),
 };

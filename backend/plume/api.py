@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from . import copilot, planner, auth, accounts, drafts
+from . import copilot, planner, auth, accounts, drafts, coordination
 from .contracts import *
 from .budget import computation
 from .database import Conflict
@@ -188,7 +188,16 @@ class SiteRequest(Input):
     site: Point
 
 
+class ObjectionConstraint(Input):
+    asset_id: str = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=2, max_length=500)
+    max_damage_fraction: float | None = Field(None, ge=0, le=1)
+    min_separation_m: float | None = Field(None, ge=0, le=30000)
+
+
 class OptimizeRequest(SiteRequest):
+    plan_id: str | None = Field(None, max_length=100)
+    constraints: list[ObjectionConstraint] = Field(default_factory=list, max_length=20)
     search_radius_m: float = Field(3_000, ge=500, le=8_000)
     traverse_meur_per_km: float = Field(2.0, ge=0, le=50)
     max_slope_deg: float = Field(8.0, ge=2, le=20)
@@ -212,6 +221,7 @@ class AssetIn(Input):
 
 
 class PlanIn(SiteRequest):
+    optimization_run_id: str | None = Field(None, max_length=100)
     operator_id: str
     name: str = Field(min_length=1, max_length=80)
     window: str = Field("", max_length=200)
@@ -279,12 +289,15 @@ class ExpectedDraftVersion(Input):
 
 
 class NoticeUpdate(Input):
+    constraints: list[ObjectionConstraint] = Field(default_factory=list, max_length=20)
     status: Literal["acknowledged", "objection"]
     reply: str | None = Field(None, max_length=1_000)
     asset_ids: list[str] = Field(default_factory=list, max_length=200)
 
     @model_validator(mode="after")
     def reason_required(self):
+        if self.status != "objection" and self.constraints:
+            raise ValueError("Constraints belong to an objection")
         if self.status == "objection" and not self.reply:
             raise ValueError("An objection requires a reason")
         return self
@@ -541,21 +554,81 @@ def footprint(body: SiteRequest):
 
 
 @app.post("/api/optimize", response_model=OptimizationOut)
-def optimize(body: OptimizeRequest):
+def optimize(body: OptimizeRequest, request: Request):
+    who = (
+        auth.identity(request, store, settings)
+        if request.cookies.get(auth.COOKIE) or body.plan_id
+        else None
+    )
+    plan = None
+    if body.plan_id:
+        plan = private_plan(body.plan_id, who)
+        who.require("plans:write", plan["operator_id"])
+    rules = [c.model_dump() for c in body.constraints] + (
+        coordination.active_constraints(store, plan) if plan else []
+    )
+    assets = store.assets()
+    if any(c["asset_id"] not in {a["id"] for a in assets} for c in rules):
+        raise HTTPException(
+            422, "Constraint asset is unavailable; review the registry and objection"
+        )
     with computation():
-        return planner.optimize(
+        result = planner.optimize(
             terrain,
             body.lander.physics(),
             body.lander.dispersion_m,
             body.site.x,
             body.site.y,
-            store.assets(),
+            assets,
             body.search_radius_m,
             body.traverse_meur_per_km,
             body.max_slope_deg,
             body.clearance_m,
             dispersion_margin_sigma=body.dispersion_margin_sigma,
+            constraints=rules,
         )
+    if who:
+        who.require("plans:write")
+        run_id = "OR-" + uuid.uuid4().hex
+        evidence = {
+            "inputs": body.model_dump(mode="json"),
+            "constraints": rules,
+            "assets": assets,
+            "provenance": provenance(terrain),
+            "result": result,
+        }
+        with store.transaction() as c:
+            c.execute(
+                "INSERT INTO optimization_runs VALUES(?,?,?,?,?,?,?)",
+                (
+                    run_id,
+                    who.organization_id,
+                    who.user_id,
+                    time.time(),
+                    plan["id"] if plan else None,
+                    plan.get("revision", 1) if plan else None,
+                    json.dumps(evidence, allow_nan=False),
+                ),
+            )
+        result["run_id"] = run_id
+    return result
+
+
+@app.get("/api/optimization-runs/{run_id}")
+def optimization_run(run_id: str, who: IdentityDep):
+    who.require("private:read")
+    with store.connect() as c:
+        row = c.execute(
+            "SELECT * FROM optimization_runs WHERE id=? AND organization_id=?",
+            (run_id, who.organization_id),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Optimization evidence not found")
+    return {
+        "id": row["id"],
+        "created_at": row["created_at"],
+        **json.loads(row["payload"]),
+    }
 
 
 @app.get("/api/curves")
@@ -708,6 +781,7 @@ def file_draft(
         "lander": d["lander"],
         "site": d["site"],
         "expected_revision": d.get("editing_revision"),
+        "optimization_run_id": d.get("optimization_run_id"),
     }
     if len(dates) == 2:
         params.update(window_start=dates[0], window_end=dates[1])
@@ -740,6 +814,37 @@ def file_plan(body, who, key, plan_id=None, draft=None):
         old = private_plan(plan_id, who)
         who.require("plans:write", old["operator_id"])
     a = store.assets()
+    rules = coordination.active_constraints(store, old) if plan_id else []
+    optimization_evidence = None
+    if body.optimization_run_id:
+        optimization_evidence = optimization_run(body.optimization_run_id, who)
+        inputs = optimization_evidence["inputs"]
+        if inputs["lander"] != body.lander.model_dump():
+            raise HTTPException(
+                422, "Optimization belongs to different lander parameters; recalculate"
+            )
+        candidates = [
+            optimization_evidence["result"].get("best_explanation"),
+            *optimization_evidence["result"].get("alternatives", []),
+        ]
+        if not any(
+            c
+            and abs(c["x"] - body.site.x) < 0.001
+            and abs(c["y"] - body.site.y) < 0.001
+            for c in candidates
+        ):
+            raise HTTPException(
+                422,
+                "Selected site is not an evaluated feasible alternative from this run",
+            )
+        if inputs.get("plan_id") != plan_id:
+            raise HTTPException(422, "Optimization belongs to a different proposal")
+        # Manual limits used in an optimization remain part of the filing evidence.
+        rules += [
+            r
+            for r in optimization_evidence["constraints"]
+            if not r.get("source_notice_id")
+        ]
     with computation():
         result = planner.assess(
             terrain,
@@ -749,7 +854,20 @@ def file_plan(body, who, key, plan_id=None, draft=None):
             body.site.y,
             a,
         )
+    constraint_evaluation = coordination.evaluate(
+        result["assets"], body.site.x, body.site.y, a, rules
+    )
+    if not constraint_evaluation["satisfied"]:
+        raise HTTPException(
+            422,
+            {
+                "message": "Requested coordination constraints are not satisfied by this revision",
+                "checks": constraint_evaluation["checks"],
+            },
+        )
     plan = {
+        "constraint_evaluation": constraint_evaluation,
+        "optimization_run_id": body.optimization_run_id,
         "operator_id": body.operator_id,
         "name": body.name,
         "window": body.window,
@@ -788,7 +906,31 @@ def file_plan(body, who, key, plan_id=None, draft=None):
         "legacy_free_text_windows": "not comparable",
     }
     notices = copilot.notices_for_plan(plan, result, a, store.operators(), previous)
+    previous_notices = (
+        [
+            n
+            for n in store.notices()
+            if n["plan_id"] == plan_id
+            and n.get("revision", 1) == old.get("revision", 1)
+        ]
+        if plan_id
+        else []
+    )
+    for notice in notices:
+        prior = next(
+            (
+                n
+                for n in previous_notices
+                if n["to_operator_id"] == notice["to_operator_id"]
+            ),
+            None,
+        )
+        if prior and prior["status"] != "acknowledged":
+            notice["constraints"] = prior.get("constraints", [])
     snapshot = {
+        "coordination_constraints": rules,
+        "constraint_evaluation": constraint_evaluation,
+        "optimization": optimization_evidence,
         "source_draft": draft,
         "assessment": result,
         "inputs": body.model_dump(mode="json"),
@@ -923,6 +1065,7 @@ def update_notice(
         who.user_id,
         who.organization_id,
         idempotency_key,
+        constraints=[c.model_dump() for c in body.constraints],
     )
 
 

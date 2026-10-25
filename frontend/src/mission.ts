@@ -64,6 +64,7 @@ interface Mission {
   signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
   signOut: () => Promise<void>;
 
+  optimizationRunId: string | null;
   draftId: string | null;
   draftVersion: number;
   draftFingerprint: string;
@@ -161,6 +162,7 @@ interface Mission {
 
 function privateDefaults() {
   return {
+    optimizationRunId: null,
     draftId: null,
     draftVersion: 0,
     draftFingerprint: "",
@@ -232,12 +234,13 @@ export function draftData(s: Mission): DraftData {
     traverse_meur_per_km: s.traverseCost,
     max_slope_deg: s.maxSlope,
     clearance_m: s.clearance,
-    optimization_run_id: null,
+    optimization_run_id: s.optimizationRunId,
   };
 }
 let pendingDraft: Promise<string | null> | null = null;
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
+  optimizationRunId: null,
   draftId: null,
   draftVersion: 0,
   draftFingerprint: "",
@@ -251,6 +254,7 @@ export const useMission = create<Mission>((set, get) => ({
     }
     const fresh = privateDefaults();
     set({
+      optimizationRunId: null,
       missionName: "",
       missionReady: false,
       lander: fresh.lander,
@@ -285,6 +289,7 @@ export const useMission = create<Mission>((set, get) => ({
         );
       const v = d.data;
       set({
+        optimizationRunId: v.optimization_run_id ?? null,
         missionName: v.name,
         window: v.window,
         missionReady: v.mission_ready,
@@ -613,6 +618,7 @@ export const useMission = create<Mission>((set, get) => ({
     set((s) => ({
       lander: { ...s.lander, ...patch },
       presetId,
+      optimizationRunId: null,
       revision: s.revision + 1,
       preview: null,
       assessment: null,
@@ -633,6 +639,7 @@ export const useMission = create<Mission>((set, get) => ({
     };
     set((s) => ({
       site,
+      optimizationRunId: null,
       revision: s.revision + 1,
       preview: null,
       assessment: null,
@@ -697,6 +704,7 @@ export const useMission = create<Mission>((set, get) => ({
         traverse_meur_per_km: traverseCost,
         max_slope_deg: maxSlope,
         clearance_m: clearance,
+        plan_id: get().editingPlanId,
       });
       if (get().revision === revision && get().sessionEpoch === epoch) {
         set({
@@ -806,6 +814,7 @@ export const useMission = create<Mission>((set, get) => ({
     get().focus("site");
     clearTimeout(toastTimer);
     set({
+      optimizationRunId: get().optimization?.run_id ?? null,
       toast: `${label} adopted · reassessing exposure at the new touchdown point.`,
       undoSite: { site: previous, label },
     });

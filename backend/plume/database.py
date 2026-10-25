@@ -725,7 +725,17 @@ class Store:
                 write,
             )
 
-    def respond(self, notice_id, status, reply, asset_ids, actor, organization, key):
+    def respond(
+        self,
+        notice_id,
+        status,
+        reply,
+        asset_ids,
+        actor,
+        organization,
+        key,
+        constraints=None,
+    ):
         with self.transaction() as c:
 
             def write():
@@ -750,8 +760,22 @@ class Store:
                     raise Conflict("Only current active revision can receive responses")
                 if not set(asset_ids).issubset(n["asset_ids"]):
                     raise Conflict("Asset references outside consultation")
+                for rule in constraints or []:
+                    a = c.execute(
+                        "SELECT organization_id FROM assets WHERE id=? AND deleted_at IS NULL",
+                        (rule["asset_id"],),
+                    ).fetchone()
+                    if (
+                        not a
+                        or a[0] != organization
+                        or rule["asset_id"] not in n["asset_ids"]
+                    ):
+                        raise Conflict(
+                            "Structured objection must reference your active asset in this consultation"
+                        )
                 now = time.time()
                 payload = {
+                    "constraints": constraints or [],
                     "id": uid("NR-"),
                     "status": status,
                     "reply": reply,
@@ -773,6 +797,7 @@ class Store:
                     ),
                 )
                 n.update(
+                    constraints=constraints or [],
                     status=status,
                     reply=reply,
                     read_at=n.get("read_at") or now,
@@ -832,7 +857,12 @@ class Store:
                 c,
                 "response:" + notice_id + ":" + organization,
                 key,
-                {"status": status, "reply": reply, "asset_ids": asset_ids},
+                {
+                    "status": status,
+                    "reply": reply,
+                    "asset_ids": asset_ids,
+                    "constraints": constraints or [],
+                },
                 write,
             )
 
