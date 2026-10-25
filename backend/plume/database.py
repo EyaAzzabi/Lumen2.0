@@ -633,6 +633,20 @@ class Store:
                                 }
                             )
                             recipients.add(row[0])
+                    # Carry unacknowledged requirements even when exposure falls below
+                    # the consultation threshold. Only an explicit response releases them.
+                    previous_notices = [json.loads(r[0]) for r in c.execute(
+                        "SELECT payload FROM notices WHERE plan_id=?", (pid,)
+                    )]
+                    for notice in notices:
+                        prior = next((n for n in previous_notices
+                            if n.get("revision", 1) == current
+                            and n["to_operator_id"] == notice["to_operator_id"]), None)
+                        if prior and prior["status"] != "acknowledged":
+                            notice["constraints"] = prior.get("constraints", [])
+                            notice["asset_ids"] = sorted(set(notice["asset_ids"]) | {
+                                rule["asset_id"] for rule in notice["constraints"]
+                            })
                 status = "awaiting_responses" if notices else "filed"
                 saved = {
                     **plan,

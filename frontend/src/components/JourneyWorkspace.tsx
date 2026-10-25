@@ -6,7 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { api, fmtKm, fmtMeur, fmtPct, RISK_COLOR, type Pt } from "../api";
+import { api, fmtKm, fmtMeur, fmtPct, RISK_COLOR, type Pt, type ConstraintEvaluation } from "../api";
 import { useMission, elevationAt } from "../mission";
 import { Icon } from "./Icon";
 import { Markdown, Term } from "../ui";
@@ -726,10 +726,16 @@ export function AnalysisWorkspace() {
                 )}
                 {opt && !candidate && (
                   <p>
-                    No feasible alternative was found. Adjust your search
-                    constraints.
+                    No feasible site found in the evaluated search. This does not
+                    establish global impossibility. Adjust your search constraints.
                   </p>
                 )}
+                {opt && <>
+                  <ConstraintChecks evaluation={opt.baseline_constraint_evaluation} title="Initial site constraints" />
+                  {opt.near_misses?.length > 0 && <details className="journey-details"><summary>Rejected candidates ({opt.near_misses.length})</summary>
+                    {opt.near_misses.map((c, i) => <div key={i}><p>Rejected · E {c.x.toFixed(1)} / N {c.y.toFixed(1)} m</p><ConstraintChecks evaluation={c.constraint_evaluation} title="Unmet limits" /></div>)}
+                  </details>}
+                </>}
                 {opt && candidate && (
                   <>
                     <label className="form-label">
@@ -797,6 +803,14 @@ export function AnalysisWorkspace() {
                       </dt>
                       <dd>{candidate.slope_deg.toFixed(1)}°</dd>
                     </dl>
+                    <p className="panel-note">Candidate: E {candidate.x.toFixed(1)} / N {candidate.y.toFixed(1)} m. Modeled loss difference: {fmtMeur(candidate.expected_loss_meur - opt.target.summary.expected_loss_meur)}.</p>
+                    <ConstraintChecks evaluation={candidateIndex === 0 ? opt.best_explanation?.constraint_evaluation : opt.alternatives[candidateIndex - 1]?.constraint_evaluation} title="Candidate constraints" />
+                    <details className="journey-details"><summary>Damage differences by equipment</summary>
+                      {(candidateIndex === 0 ? opt.best?.assets : opt.alternatives[candidateIndex - 1]?.assets)?.map(r => {
+                        const before = opt.target.assets.find(a => a.asset_id === r.asset_id);
+                        return <p className="panel-note" key={r.asset_id}>{assets.find(a => a.id === r.asset_id)?.name ?? r.asset_id}: {before ? fmtPct(before.damage_fraction) : "unknown"} → {fmtPct(r.damage_fraction)} mean modeled damage</p>;
+                      })}
+                    </details>
                     <div
                       className="preview-switch"
                       aria-label="Compare map previews"
@@ -991,6 +1005,10 @@ export function CoordinationWorkspace() {
     ),
     [noticeId, setNoticeId] = useState(""),
     [reply, setReply] = useState(""),
+    [constraintAsset, setConstraintAsset] = useState(""),
+    [reason, setReason] = useState(""),
+    [maximum, setMaximum] = useState(""),
+    [minimum, setMinimum] = useState(""),
     [pending, setPending] = useState(false),
     [error, setError] = useState("");
   const plan = plans.find((p) => p.id === selected) ?? plans[0];
@@ -1014,12 +1032,21 @@ export function CoordinationWorkspace() {
         .then(() => useMission.getState().refresh())
         .catch((e) => setError(String(e)));
   }, [notice?.id, acting]);
+  const registryAssets = useMission((s) => s.assets);
+  useEffect(() => {
+    setConstraintAsset(""); setReason(""); setMaximum(""); setMinimum(""); setReply("");
+  }, [notice?.id, acting]);
   async function respond(status: "acknowledged" | "objection") {
     if (!notice) return;
     setPending(true);
     setError("");
     try {
-      await api.updateNotice(notice.id, status, reply.trim() || undefined);
+      await api.updateNotice(notice.id, status, reply.trim() || reason.trim() || undefined,
+        status === "objection" && constraintAsset ? [{
+          asset_id: constraintAsset, reason: reason.trim(),
+          max_damage_fraction: maximum === "" ? null : Number(maximum) / 100,
+          min_separation_m: minimum === "" ? null : Number(minimum),
+        }] : []);
       await useMission.getState().refresh();
       setReply("");
     } catch (e) {
@@ -1233,6 +1260,11 @@ export function CoordinationWorkspace() {
                   <p className="notice-evidence">{notice.body}</p>
                 </details>
                 {notice.reply && <blockquote>{notice.reply}</blockquote>}
+                {(notice.constraints ?? []).map((c, i) => <p className="panel-note" key={i}>
+                  {registryAssets.find(a => a.id === c.asset_id)?.name ?? c.asset_id}: {c.reason}
+                  {c.max_damage_fraction != null && ` · maximum mean modeled damage ${fmtPct(c.max_damage_fraction)}`}
+                  {c.min_separation_m != null && ` · minimum landing distance ${c.min_separation_m} m`}
+                </p>)}
                 {notice.to_operator_id === acting &&
                   session?.permissions.includes("notices:respond") && (
                     <>
@@ -1246,6 +1278,21 @@ export function CoordinationWorkspace() {
                           placeholder="Describe your concern, or add a comment…"
                         />
                       </label>
+                      <details className="journey-details">
+                        <summary>Structured objection</summary>
+                        <label className="form-label">Equipment
+                          <select aria-label="Objection equipment" value={constraintAsset} onChange={e => setConstraintAsset(e.target.value)}>
+                            <option value="">Text-only concern</option>
+                            {registryAssets.filter(a => a.operator_id === acting && notice.asset_ids.includes(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        </label>
+                        {constraintAsset && <>
+                          <label className="form-label">Required reason<input aria-label="Objection reason" value={reason} maxLength={500} onChange={e => setReason(e.target.value)} /></label>
+                          <label className="form-label">Maximum mean modeled damage / % (optional)<input aria-label="Maximum modeled damage percent" type="number" min="0" max="100" step="any" value={maximum} onChange={e => setMaximum(e.target.value)} /></label>
+                          <label className="form-label">Minimum landing distance / m (optional)<input aria-label="Minimum landing distance metres" type="number" min="0" max="30000" step="any" value={minimum} onChange={e => setMinimum(e.target.value)} /></label>
+                          <p className="panel-note">Negotiated model limits, not certified safety limits. The response above provides additional explanation.</p>
+                        </>}
+                      </details>
                       <div className="response-actions">
                         <button
                           className="outline-button"
@@ -1258,7 +1305,10 @@ export function CoordinationWorkspace() {
                           className="outline-button danger"
                           disabled={
                             pending ||
-                            !reply.trim() ||
+                            (!reply.trim() && !reason.trim()) ||
+                            (!!constraintAsset && (reason.trim().length < 2 ||
+                              (maximum !== "" && (!Number.isFinite(Number(maximum)) || Number(maximum) < 0 || Number(maximum) > 100)) ||
+                              (minimum !== "" && (!Number.isFinite(Number(minimum)) || Number(minimum) < 0 || Number(minimum) > 30000)))) ||
                             plan?.status === "withdrawn"
                           }
                           onClick={() => void respond("objection")}
@@ -1341,4 +1391,15 @@ function LimitsBadge() {
       Simplified model · not flight-certified
     </button>
   );
+}
+
+function ConstraintChecks({ evaluation, title }: { evaluation?: ConstraintEvaluation; title: string }) {
+  if (!evaluation?.checks.length) return null;
+  return <section aria-label={title}><h3 className="section-caption">{title}</h3>
+    {evaluation.checks.map((c, i) => <p className="panel-note" key={i}>
+      {c.satisfied ? "Satisfied" : "Not satisfied"} · {c.asset_id} · {c.reason}
+      {c.max_damage_fraction != null && ` · mean damage ${c.actual_damage_fraction == null ? "unknown" : fmtPct(c.actual_damage_fraction)} / maximum ${fmtPct(c.max_damage_fraction)}`}
+      {c.min_separation_m != null && ` · distance ${c.actual_distance_m?.toFixed(1) ?? "unknown"} / minimum ${c.min_separation_m} m`}
+    </p>)}
+  </section>;
 }

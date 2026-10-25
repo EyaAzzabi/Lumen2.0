@@ -194,6 +194,13 @@ class ObjectionConstraint(Input):
     max_damage_fraction: float | None = Field(None, ge=0, le=1)
     min_separation_m: float | None = Field(None, ge=0, le=30000)
 
+    @model_validator(mode="after")
+    def meaningful_reason(self):
+        self.reason = self.reason.strip()
+        if len(self.reason) < 2:
+            raise ValueError("A structured objection requires a reason")
+        return self
+
 
 class OptimizeRequest(SiteRequest):
     plan_id: str | None = Field(None, max_length=100)
@@ -298,6 +305,8 @@ class NoticeUpdate(Input):
     def reason_required(self):
         if self.status != "objection" and self.constraints:
             raise ValueError("Constraints belong to an objection")
+        if self.reply is not None:
+            self.reply = self.reply.strip()
         if self.status == "objection" and not self.reply:
             raise ValueError("An objection requires a reason")
         return self
@@ -627,6 +636,7 @@ def optimization_run(run_id: str, who: IdentityDep):
     return {
         "id": row["id"],
         "created_at": row["created_at"],
+        "plan_revision": row["plan_revision"],
         **json.loads(row["payload"]),
     }
 
@@ -839,6 +849,8 @@ def file_plan(body, who, key, plan_id=None, draft=None):
             )
         if inputs.get("plan_id") != plan_id:
             raise HTTPException(422, "Optimization belongs to a different proposal")
+        if plan_id and optimization_evidence["plan_revision"] != old.get("revision", 1):
+            raise HTTPException(409, "Optimization predates the current revision; recalculate")
         # Manual limits used in an optimization remain part of the filing evidence.
         rules += [
             r

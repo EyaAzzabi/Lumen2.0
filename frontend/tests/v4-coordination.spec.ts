@@ -70,6 +70,13 @@ test("two operators file, object, optimize, revise and explicitly coordinate", a
     .fill(
       "Please reduce modeled damage to our equipment to at most 3 percent.",
     );
+  await n.getByText("Structured objection", {exact:true}).click();
+  const equipment = n.getByLabel("Objection equipment");
+  const assetId = await equipment.locator("option").nth(1).getAttribute("value");
+  await equipment.selectOption(assetId!);
+  await n.getByLabel("Objection reason").fill("Protect our equipment");
+  await n.getByLabel("Maximum modeled damage percent").fill("3");
+  await n.getByLabel("Minimum landing distance metres").fill("1000");
   await n.getByRole("button", { name: "Raise a concern", exact: true }).click();
   await expect(n.locator("h3.coordination-status")).toHaveText(
     "objection received",
@@ -84,6 +91,7 @@ test("two operators file, object, optimize, revise and explicitly coordinate", a
     .click();
   await p.getByRole("button", { name: "Find alternative sites" }).click();
   await expect(p.getByLabel("Alternative site", { exact: true })).toBeVisible();
+  await expect(p.getByRole("region", {name:"Candidate constraints"})).toContainText("Satisfied");
   await p.getByRole("button", { name: "Use this landing site" }).click();
   await expect(p.locator(".journey-verdict strong")).toBeVisible();
   await p.getByRole("button", { name: "Coordinate", exact: true }).click();
