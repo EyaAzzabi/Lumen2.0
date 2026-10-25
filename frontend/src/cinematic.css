@@ -19,7 +19,7 @@
   letter-spacing: 0.16em;
 }
 .flight-brand small {
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.17em;
 }
 .flight-brand img {
@@ -94,7 +94,7 @@
 .flight-footer {
   background: #02080f;
   letter-spacing: 0.08em;
-  font-size: 7px;
+  font-size: 10px;
 }
 /* A dimensional marketing environment, with independently moving overlays. */
 .cinematic-gateway {
@@ -132,7 +132,7 @@
 }
 .cinematic-gateway .eyeline {
   color: var(--ice);
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.22em;
 }
 .cinematic-gateway .eyeline > span {
@@ -172,7 +172,7 @@
   box-shadow:
     inset 0 1px 0 #e4faff66,
     0 0 25px #65d9ff12;
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.01em;
 }
 .action-primary:hover:not(:disabled) {
@@ -229,7 +229,7 @@
   display: block;
 }
 .hero-proof span {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.12em;
   color: #adbdce;
   display: block;
@@ -257,7 +257,7 @@
   pointer-events: none;
 }
 .frontier-timeline > span {
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   letter-spacing: 0.12em;
   color: #7ea2bb;
 }
@@ -284,7 +284,7 @@
 .frontier-timeline small {
   display: block;
   color: #a9b9ca;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.7;
   margin-top: 4px;
 }
@@ -327,7 +327,7 @@
   flex: 1;
 }
 .active-region-card small {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.1em;
   color: var(--ice);
 }
@@ -338,7 +338,7 @@
 }
 .active-region-card em {
   font:
-    9px Inter,
+    11px Inter,
     sans-serif;
   color: #a8bed2;
   font-style: normal;
@@ -391,7 +391,7 @@
 }
 .frontier-features small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.7;
   color: #a4b6c9;
   max-width: 130px;
@@ -404,7 +404,7 @@
   position: absolute;
   bottom: 24px;
   left: 5%;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.12em;
   color: #8da3b7;
   display: flex;
@@ -458,12 +458,12 @@
 }
 .rail-region-card > small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #a1b5ca;
   margin: 0 13px 12px;
 }
 .rail-region-card > span {
-  font: 6px var(--mono) !important;
+  font: 10px var(--mono) !important;
   color: #8eb7d0 !important;
   margin: 0 13px;
   letter-spacing: 0.02em;
@@ -474,7 +474,7 @@
 }
 .rail-index {
   text-align: left;
-  font-size: 7px;
+  font-size: 10px;
   padding: 12px 25px;
 }
 .mission-rail .rail-top > button:not(.rail-region-card),
@@ -507,7 +507,7 @@
 }
 .mission-rail .rail-bottom > button {
   height: 40px;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .rail-mission-card {
   margin: auto 15px 17px;
@@ -517,7 +517,7 @@
   background: #07131e8c;
 }
 .rail-mission-card > span {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: #7f9ab1;
   letter-spacing: 0.07em;
 }
@@ -527,7 +527,7 @@
   margin-top: 7px;
 }
 .rail-mission-card > small {
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   color: #9eb4c9;
   display: block;
   margin-top: 7px;
@@ -536,7 +536,7 @@
   display: flex;
   gap: 12px;
   color: #7e9bb3;
-  font-size: 8px;
+  font-size: 10.5px;
   margin-top: 13px;
 }
 .mission-rail .rail-mission-card > button {
@@ -549,7 +549,7 @@
   padding: 9px 0 0;
   border-top: 1px solid #53748b40;
   color: var(--ice);
-  font-size: 9px;
+  font-size: 11px;
 }
 .operations-panel {
   display: none;
@@ -568,7 +568,7 @@
   width: 302px;
 }
 .panel-header {
-  font-size: 9px;
+  font-size: 11px;
   min-height: 44px;
   padding: 14px 19px;
   color: #c5d6e4;
@@ -581,7 +581,7 @@
   font-size: 43px;
 }
 .metric-caption {
-  font-size: 8px;
+  font-size: 10.5px;
   line-height: 1.7;
   color: #9cb3c6;
 }
@@ -590,26 +590,26 @@
 }
 .panel-note {
   color: #819aaf;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .exposure-list > button > div:first-child {
   font-size: 11px;
 }
 .exposure-list small {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .panel-subtitle {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .mini-metrics span {
-  font-size: 9px;
+  font-size: 11px;
 }
 .exposure-panel > .optimizer-invitation {
   display: none;
 }
 .outline-button {
   border-radius: 7px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.01em;
   border-color: #508eb044;
 }
@@ -617,7 +617,7 @@
   border-radius: 8px;
 }
 .risk-pill {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .scene-heading {
   left: 245px;
@@ -629,12 +629,12 @@
   margin: 10px 0 9px;
 }
 .scene-eyebrow {
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   letter-spacing: 0.16em;
   color: var(--ice);
 }
 .scene-heading p {
-  font-size: 7px;
+  font-size: 10px;
   color: #9ab0c5;
 }
 .view-controls {
@@ -650,7 +650,7 @@
   border-radius: 5px;
 }
 .view-controls button span {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .view-controls button.active {
   background: #1276a832;
@@ -662,7 +662,7 @@
 .scene-help {
   left: 248px;
   bottom: 249px;
-  font-size: 8px;
+  font-size: 10.5px;
   color: #8ba7bc;
 }
 .map-legend {
@@ -676,28 +676,28 @@
   border-radius: 9px;
 }
 .map-legend .panel-subtitle {
-  font-size: 7px;
+  font-size: 10px;
 }
 .map-scale {
   margin-top: 12px;
-  font-size: 7px;
+  font-size: 10px;
 }
 .map-legend > p {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .legend-colors {
   margin: 8px 0 5px;
 }
 .legend-values {
-  font-size: 7px;
+  font-size: 10px;
 }
 .map-scale em {
-  font-size: 6px;
+  font-size: 10px;
 }
 .compute-status {
   top: 185px;
   border-radius: 6px;
-  font-size: 9px;
+  font-size: 11px;
   background: #031421eb;
 }
 .command-overview {
@@ -715,7 +715,7 @@
   font-size: 17px;
 }
 .command-overview span {
-  font-size: 5px;
+  font-size: 10px;
 }
 .mode-operations .scene-help {
   bottom: 310px;
@@ -779,7 +779,7 @@
   border: 0;
   background: none;
   color: #d1e4f1;
-  font-size: 10px;
+  font-size: 11.5px;
   outline: 0 !important;
   padding: 0;
 }
@@ -818,7 +818,7 @@
 }
 .search-results small {
   display: block;
-  font-size: 8px;
+  font-size: 10.5px;
   color: #86a2b7;
   text-transform: capitalize;
   margin-top: 5px;
@@ -844,7 +844,7 @@
   height: 40px;
   padding: 0 14px;
   cursor: pointer;
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   letter-spacing: 0.04em;
   color: #b8d7e9;
 }
@@ -897,7 +897,7 @@
   background: none;
   border: 0;
   color: #8eacc1;
-  font-size: 9px;
+  font-size: 11px;
   border-radius: 4px;
 }
 .scene-style-switch > button.active {
@@ -908,7 +908,7 @@
   position: absolute;
   top: 54px;
   left: 0;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   background: #08273cf0;
   border: 1px solid #65d9ff55;
   padding: 10px 14px;
@@ -927,7 +927,7 @@
   color: var(--ice);
   padding: 8px 12px;
   border-radius: 5px;
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
 }
 .mode-registry .spatial-toolbar {
   top: 125px;
@@ -995,7 +995,7 @@
   animation: orbit-spin 20s linear infinite;
 }
 .dock-eyebrow {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.1em;
   color: #a6c1d4;
 }
@@ -1009,7 +1009,7 @@
   max-width: 240px;
 }
 .selected-context p {
-  font-size: 9px;
+  font-size: 11px;
   color: #8eabc0;
   margin: 0;
   text-transform: capitalize;
@@ -1024,11 +1024,11 @@
   display: flex;
   gap: 20px;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 11px;
   color: #95b0c5;
 }
 .context-numbers b {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: #d1e6f4;
   font-weight: 400;
 }
@@ -1058,11 +1058,11 @@
   border: 1px solid #34637b50;
   border-radius: 7px;
   color: #a1deff;
-  font-size: 9px;
+  font-size: 11px;
 }
 .quick-actions button span {
   color: #c1d5e5;
-  font-size: 9px;
+  font-size: 11px;
 }
 .quick-actions button:hover {
   border-color: #65d9ff99;
@@ -1092,12 +1092,12 @@
   flex: none;
 }
 .viewpoint-caption > span {
-  font: 7px/1.8 var(--mono);
+  font: 10px/1.8 var(--mono);
   letter-spacing: 0.08em;
   color: #9bbad0;
 }
 .viewpoint-caption > small {
-  font: 5px var(--mono);
+  font: 10px var(--mono);
   color: #597e98;
   margin-top: 8px;
   letter-spacing: 0.04em;
@@ -1140,18 +1140,18 @@
   position: absolute;
   top: 8px;
   right: 11px;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: #a9dff9;
 }
 .viewpoint-card strong {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 500;
   margin-top: 15px;
   text-shadow: 0 2px 8px black;
 }
 .viewpoint-card small {
-  font: 5px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.05em;
   color: #91b2ca;
   display: block;
@@ -1186,11 +1186,11 @@
   color: var(--ice);
 }
 .tour-control > span {
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.07em;
 }
 .tour-control > small {
-  font-size: 7px;
+  font-size: 10px;
   color: #7fa6bf;
 }
 .tour-control.active {
@@ -1199,7 +1199,7 @@
 }
 .spatial-label {
   font:
-    9px Inter,
+    11px Inter,
     sans-serif;
   padding: 9px 12px;
   border: 1px solid #5d9db750;
@@ -1209,7 +1209,7 @@
   box-shadow: 0 6px 20px #0004;
 }
 .spatial-label small {
-  font: 6px var(--mono);
+  font: 10px var(--mono);
   margin-top: 6px;
 }
 .spatial-label::after {
@@ -1227,24 +1227,24 @@
   box-shadow: 0 0 22px #65d9ff22;
 }
 .site-label {
-  font-size: 8px;
+  font-size: 10.5px;
   padding: 10px 12px;
   background: #061421ee;
   border-color: #65d9ff66;
   border-radius: 8px;
 }
 .site-label small {
-  font-size: 7px;
+  font-size: 10px;
 }
 .candidate-label {
-  font: 8px var(--mono);
+  font: 10.5px var(--mono);
   padding: 10px 14px;
   background: #04201ded;
   border-radius: 7px;
   box-shadow: 0 0 20px #35d7a00a;
 }
 .candidate-label small {
-  font-size: 8px;
+  font-size: 10.5px;
   margin-top: 6px;
 }
 .candidate-card {
@@ -1256,18 +1256,18 @@
   font-size: 30px;
 }
 .candidate-card .data-list {
-  font-size: 10px;
+  font-size: 11.5px;
   gap: 10px;
 }
 .candidate-card .data-list dd {
-  font-size: 9px;
+  font-size: 11px;
 }
 .candidate-coords {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .optimizer-panel .eyeline {
   color: var(--ice);
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .optimizer-panel h2 {
   font-size: 29px;
@@ -1276,7 +1276,7 @@
   font-size: 11px;
 }
 .optimizer-panel .form-label {
-  font-size: 9px;
+  font-size: 11px;
 }
 .optimizer-panel .panel-content {
   padding: 20px 18px;
@@ -1294,7 +1294,7 @@
   font-size: 11px;
 }
 .optimizer-panel .unit-input > span {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .mode-optimizer .map-legend {
   display: none;
@@ -1360,7 +1360,7 @@
 }
 .mode-setup .configuration .form-label {
   margin-bottom: 14px;
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .mode-setup .configuration .form-label > input,
 .mode-setup .configuration .form-label > select {
@@ -1385,7 +1385,7 @@
   border-radius: 5px;
 }
 .mode-setup .configuration .action-primary {
-  font-size: 9px;
+  font-size: 11px;
   margin-top: 17px;
 }
 .mode-setup .lander-annotation {
@@ -1400,7 +1400,7 @@
   box-shadow: 0 0 30px #0002;
 }
 .mode-setup .lander-annotation > span {
-  font-size: 6px;
+  font-size: 10px;
   color: var(--ice);
 }
 .mode-setup .lander-annotation h3 {
@@ -1408,7 +1408,7 @@
   max-width: 230px;
 }
 .mode-setup .lander-annotation p {
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.8;
   margin-bottom: 0;
 }
@@ -1434,7 +1434,7 @@
 }
 .preset-dock > .dock-eyebrow > span {
   color: #6c8ca4;
-  font-size: 6px;
+  font-size: 10px;
 }
 .preset-dock > div:last-child {
   display: flex;
@@ -1462,7 +1462,7 @@
 }
 .preset-dock small {
   display: block;
-  font: 7px var(--mono);
+  font: 10px var(--mono);
   color: #829fb6;
   margin-top: 6px;
 }
@@ -1498,10 +1498,10 @@
   padding: 18px 22px;
 }
 .timeline-heading {
-  font-size: 9px;
+  font-size: 11px;
 }
 .timeline-heading > small {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .timeline-controls {
   gap: 16px;
@@ -1510,7 +1510,7 @@
   height: 3px;
 }
 .phase-labels button {
-  font-size: 8px;
+  font-size: 10.5px;
 }
 .timeline-time {
   font-size: 11px;
@@ -1614,7 +1614,7 @@
     font-size: 13px;
   }
   .frontier-features small {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .exposure-panel {
     width: 320px;
@@ -1641,10 +1641,10 @@
     font-size: 11px;
   }
   .layer-popover > summary {
-    font-size: 9px;
+    font-size: 11px;
   }
   .scene-style-switch > button {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 0 11px;
   }
   .mode-setup .configuration {
@@ -1666,13 +1666,13 @@
     margin-bottom: 23px;
   }
   .mode-setup .configuration .form-label {
-    font-size: 9px;
+    font-size: 11px;
   }
   .preset-dock button > span:not(.preset-selected) {
     font-size: 12px;
   }
   .preset-dock small {
-    font-size: 8px;
+    font-size: 10.5px;
   }
 }
 @media (max-width: 1400px) {
@@ -1686,7 +1686,7 @@
     font-size: 15px;
   }
   .rail-region-card > span {
-    font-size: 5px !important;
+    font-size: 10px !important;
   }
   .mission-rail .rail-top > button:not(.rail-region-card),
   .mission-rail .rail-bottom > button {
@@ -1697,7 +1697,7 @@
     height: 43px;
   }
   .mission-rail button span {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .rail-mission-card {
     padding: 11px;
@@ -1724,10 +1724,10 @@
   }
   .operator-switch select {
     max-width: 170px;
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .demo-button {
-    font-size: 8px;
+    font-size: 10.5px;
     padding: 9px 13px;
   }
   .scene-heading,
@@ -1759,7 +1759,7 @@
     width: 350px;
   }
   .quick-actions button span {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .selected-context {
     gap: 12px;
@@ -1769,7 +1769,7 @@
     min-width: 150px;
   }
   .context-numbers > span {
-    font-size: 8px;
+    font-size: 10.5px;
     gap: 10px;
   }
   .context-art {
@@ -1781,10 +1781,10 @@
     max-width: 200px;
   }
   .selected-context p {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .dock-eyebrow {
-    font-size: 6px;
+    font-size: 10px;
   }
   .exposure-panel {
     width: 280px;
@@ -1826,7 +1826,7 @@
     padding: 8px 11px;
   }
   .preset-dock button > span:not(.preset-selected) {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .preset-dock button > svg {
     width: 22px;
@@ -1862,7 +1862,7 @@
     font-size: 27px;
   }
   .hero-proof span {
-    font-size: 6px;
+    font-size: 10px;
   }
   .frontier-timeline {
     right: 3%;
@@ -1874,7 +1874,7 @@
     font-size: 14px;
   }
   .frontier-timeline small {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .hero-bottom-deck {
     gap: 15px;
@@ -1895,7 +1895,7 @@
     font-size: 17px;
   }
   .active-region-card em {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .frontier-features > button {
     padding: 5px 11px;
@@ -1906,14 +1906,14 @@
     height: 38px;
   }
   .frontier-features strong {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .frontier-features small {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .hero-art-caption {
     bottom: 17px;
-    font-size: 6px;
+    font-size: 10px;
   }
 }
 @media (max-width: 1100px) {
@@ -1925,7 +1925,7 @@
   }
   .operational-nav button {
     padding: 0 11px;
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .flight-brand > span {
     font-size: 21px;
@@ -1950,12 +1950,12 @@
     height: 58px;
   }
   .mission-rail button span {
-    font-size: 7px;
+    font-size: 10px;
   }
   .rail-index {
     text-align: center;
     padding: 20px 0 15px;
-    font-size: 6px;
+    font-size: 10px;
   }
   .rail-bottom {
     padding-bottom: 7px;
@@ -1991,7 +1991,7 @@
   }
   .asset-search {
     min-width: 190px;
-    font-size: 9px;
+    font-size: 11px;
   }
   .layer-popover > summary {
     font-size: 0;
@@ -2018,7 +2018,7 @@
     padding: 8px 10px;
   }
   .viewpoint-card strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .viewpoint-card small {
     font-size: 4px;
@@ -2074,7 +2074,7 @@
     display: none;
   }
   .preset-dock small {
-    font-size: 6px;
+    font-size: 10px;
   }
   .mode-registry .registry-panel,
   .mode-notices .coordination-list {
@@ -2136,7 +2136,7 @@
     padding-right: 20px;
   }
   .hero-proof span {
-    font-size: 5px;
+    font-size: 10px;
   }
   .hero-proof strong {
     font-size: 25px;
@@ -2170,13 +2170,13 @@
     height: 34px;
   }
   .subscription-badge {
-    font-size: 6px;
+    font-size: 10px;
   }
   .public-nav {
     gap: 20px;
   }
   .public-nav button {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .public-nav button:last-child {
     padding: 8px 15px;
@@ -2188,7 +2188,7 @@
     font-size: 28px;
   }
   .scene-eyebrow {
-    font-size: 6px;
+    font-size: 10px;
   }
   .view-controls {
     top: 90px;
@@ -2256,13 +2256,13 @@
     display: none;
   }
   .viewpoint-card strong {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .viewpoint-card small {
-    font-size: 5px;
+    font-size: 10px;
   }
   .viewpoint-number {
-    font-size: 6px;
+    font-size: 10px;
   }
   .tour-control {
     min-width: 112px;
@@ -2287,7 +2287,7 @@
     font-size: 15px;
   }
   .command-overview span {
-    font-size: 5px;
+    font-size: 10px;
   }
   .scene-help {
     display: none;
@@ -2325,10 +2325,10 @@
     display: none;
   }
   .preset-dock button > span:not(.preset-selected) {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .preset-dock small {
-    font-size: 5px;
+    font-size: 10px;
   }
   .preset-dock > .dock-eyebrow > span {
     display: none;
@@ -2349,7 +2349,7 @@
     display: none;
   }
   .phase-labels button {
-    font-size: 6px;
+    font-size: 10px;
   }
   .timeline-controls {
     gap: 8px;
@@ -2390,7 +2390,7 @@
     font-size: 13px;
   }
   .cinematic-gateway .eyeline {
-    font-size: 7px;
+    font-size: 10px;
     letter-spacing: 0.12em;
   }
   .hero-environment {
@@ -2410,7 +2410,7 @@
     font-size: 25px;
   }
   .hero-proof span {
-    font-size: 5px;
+    font-size: 10px;
     max-width: 95px;
     line-height: 1.8;
   }
@@ -2436,13 +2436,13 @@
     font-size: 19px;
   }
   .active-region-card em {
-    font-size: 9px;
+    font-size: 11px;
   }
   .frontier-features {
     display: none;
   }
   .hero-art-caption {
-    font-size: 5px;
+    font-size: 10px;
     bottom: 18px;
     gap: 9px;
   }
@@ -2453,11 +2453,11 @@
     gap: 13px;
   }
   .cinematic-gateway .action-primary {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 13px 20px;
   }
   .watch-demo {
-    font-size: 10px;
+    font-size: 11.5px;
     padding: 11px 15px;
   }
   .orbital-flow {
@@ -2469,13 +2469,13 @@
     width: 53px;
   }
   .mission-rail button span {
-    font-size: 6px;
+    font-size: 10px;
   }
   .mission-rail .rail-top > button:not(.rail-region-card) {
     height: 56px;
   }
   .rail-index {
-    font-size: 5px;
+    font-size: 10px;
   }
   .mission-rail .rail-bottom > button {
     height: 41px;
@@ -2490,10 +2490,10 @@
     font-size: 25px;
   }
   .scene-eyebrow {
-    font-size: 5px;
+    font-size: 10px;
   }
   .scene-heading p {
-    font-size: 5px;
+    font-size: 10px;
   }
   .spatial-toolbar {
     left: 68px;
@@ -2507,7 +2507,7 @@
     padding: 8px 10px;
   }
   .asset-search > input {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .layer-popover {
     display: none;
@@ -2540,7 +2540,7 @@
     padding: 12px 15px;
   }
   .exposure-panel .panel-header {
-    font-size: 8px;
+    font-size: 10.5px;
     padding: 12px 15px;
     min-height: 36px;
   }
@@ -2551,7 +2551,7 @@
     padding: 14px;
   }
   .metric-caption {
-    font-size: 7px;
+    font-size: 10px;
   }
   .mini-metrics {
     margin: 12px 0;
@@ -2575,14 +2575,14 @@
   }
   .quick-actions button {
     height: 67px;
-    font-size: 7px;
+    font-size: 10px;
     gap: 7px;
   }
   .quick-actions button svg {
     width: 19px;
   }
   .quick-actions button span {
-    font-size: 7px;
+    font-size: 10px;
   }
   .quick-actions > div {
     gap: 6px;
@@ -2599,16 +2599,16 @@
     display: none;
   }
   .viewpoint-card strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .tour-control {
     min-width: 101px;
   }
   .tour-control > span {
-    font-size: 6px;
+    font-size: 10px;
   }
   .tour-control > small {
-    font-size: 6px;
+    font-size: 10px;
   }
   .command-overview {
     display: none;
@@ -2648,13 +2648,13 @@
     height: 53px;
   }
   .preset-dock button > span:not(.preset-selected) {
-    font-size: 7px;
+    font-size: 10px;
   }
   .preset-dock small {
     font-size: 4px;
   }
   .preset-dock > .dock-eyebrow {
-    font-size: 6px;
+    font-size: 10px;
   }
   .mode-registry .registry-panel,
   .mode-notices .coordination-list {
@@ -2700,14 +2700,14 @@
     max-height: 32%;
   }
   .timeline-heading {
-    font-size: 7px;
+    font-size: 10px;
     gap: 8px;
   }
   .timeline-time {
-    font-size: 8px;
+    font-size: 10.5px;
   }
   .timeline-time em {
-    font-size: 6px;
+    font-size: 10px;
   }
   .timeline-controls {
     gap: 5px;
@@ -2723,7 +2723,7 @@
     left: 53px;
   }
   .flight-footer {
-    font-size: 5px;
+    font-size: 10px;
   }
   .hero-art-caption {
     max-width: 90%;
@@ -2745,13 +2745,13 @@
     flex-wrap: wrap;
   }
   .cinematic-gateway .action-primary {
-    font-size: 9px;
+    font-size: 11px;
     gap: 15px;
     min-height: 45px;
     padding: 12px 17px;
   }
   .watch-demo {
-    font-size: 9px;
+    font-size: 11px;
     padding: 10px 12px;
   }
   .watch-demo > span {
@@ -2772,7 +2772,7 @@
     padding-right: 12px;
   }
   .hero-proof span {
-    font-size: 5px;
+    font-size: 10px;
     letter-spacing: 0.04em;
     max-width: 82px;
   }
@@ -2784,10 +2784,10 @@
     font-size: 17px;
   }
   .active-region-card small {
-    font-size: 6px;
+    font-size: 10px;
   }
   .active-region-card em {
-    font-size: 8px;
+    font-size: 10.5px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

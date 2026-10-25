@@ -206,15 +206,24 @@ function TerrainSurface() {
       receiveShadow
       visible={visible}
       onClick={(e) => {
-        if (e.delta > 4 || !useMission.getState().placeMode) return;
-        e.stopPropagation();
-        useMission.getState().moveSite({
+        if (e.delta > 4) return;
+        const point = {
           x: Math.round(e.point.x * 1000),
           y: Math.round(-e.point.z * 1000),
-        });
+        };
+        if (useMission.getState().pickingAsset) {
+          e.stopPropagation();
+          useMission.setState({ assetPick: point, pickingAsset: false });
+          document.body.style.cursor = "";
+          return;
+        }
+        if (!useMission.getState().placeMode) return;
+        e.stopPropagation();
+        useMission.getState().moveSite(point);
       }}
       onPointerMove={(e) => {
-        if (useMission.getState().placeMode) {
+        const s = useMission.getState();
+        if (s.placeMode || s.pickingAsset) {
           e.stopPropagation();
           document.body.style.cursor = "crosshair";
         }
@@ -349,7 +358,12 @@ function Infrastructure() {
         .map((a) => {
           const result = results?.find((r) => r.asset_id === a.id),
             color = result ? RISK_COLOR[result.risk] : "#aeb9c6",
-            isSelected = selected === a.id;
+            isSelected = selected === a.id,
+            // Full labels only where they matter; the rest become dots.
+            full =
+              isSelected ||
+              result?.risk === "elevated" ||
+              result?.risk === "critical";
           return (
             <group
               key={a.id}
@@ -404,27 +418,26 @@ function Infrastructure() {
                 zIndexRange={[20, 0]}
                 style={{ pointerEvents: "none" }}
               >
-                <button
-                  title={a.name}
-                  className={`spatial-label ${isSelected ? "selected" : ""}`}
-                  style={{
-                    pointerEvents: "auto",
-                    borderLeftColor: color,
-                    transform:
-                      a.id === "a-hab"
-                        ? "translate(-40px,-24px)"
-                        : a.id === "a-sol"
-                          ? "translate(0,12px)"
-                          : a.id === "s-sol"
-                            ? "translate(40px,-24px)"
-                            : undefined,
-                  }}
-                  onClick={() => useMission.getState().selectAsset(a.id)}
-                >
-                  <span className="label-dot" style={{ background: color }} />
-                  {a.name.replace(" (parked)", "")}
-                  <small>{result ? result.risk : "SIMULATED ASSET"}</small>
-                </button>
+                {full ? (
+                  <button
+                    title={a.name}
+                    className={`spatial-label ${isSelected ? "selected" : ""}`}
+                    style={{ pointerEvents: "auto", borderLeftColor: color }}
+                    onClick={() => useMission.getState().selectAsset(a.id)}
+                  >
+                    <span className="label-dot" style={{ background: color }} />
+                    {a.name.replace(" (parked)", "")}
+                    <small>{result ? result.risk : "SIMULATED ASSET"}</small>
+                  </button>
+                ) : (
+                  <button
+                    className="spatial-dot"
+                    style={{ pointerEvents: "auto", background: color }}
+                    aria-label={`${a.name}${result ? `, ${result.risk}` : ""}`}
+                    data-name={a.name.replace(" (parked)", "")}
+                    onClick={() => useMission.getState().selectAsset(a.id)}
+                  />
+                )}
               </Html>
             </group>
           );
@@ -597,22 +610,16 @@ function Candidates() {
               zIndexRange={[18, 0]}
             >
               <button
-                className="candidate-label"
-                style={{
-                  transform:
-                    i === 1
-                      ? "translate(-40px,-18px)"
-                      : i === 2
-                        ? "translate(40px,10px)"
-                        : undefined,
-                }}
-                onClick={() => {
-                  useMission.getState().moveSite({ x: c.x, y: c.y }, true);
-                  useMission.getState().focus("site");
-                }}
+                className={`candidate-label ${i === 0 ? "" : "compact"}`}
+                title={`${i === 0 ? "Best evaluated site" : `Alternative ${i}`} · €${c.expected_loss_meur.toFixed(2)}M modeled loss`}
+                onClick={() =>
+                  useMission
+                    .getState()
+                    .adoptSite({ x: c.x, y: c.y }, i === 0 ? "Best evaluated site" : `Alternative ${i}`)
+                }
               >
-                {i === 0 ? "BEST SITE" : `ALT ${i}`}
-                <small>€{c.expected_loss_meur.toFixed(2)}M loss</small>
+                {i === 0 ? "BEST SITE" : `A${i}`}
+                {i === 0 && <small>€{c.expected_loss_meur.toFixed(2)}M loss</small>}
               </button>
             </Html>
           </group>
@@ -950,7 +957,7 @@ function RegisteredPlans() {
             <meshBasicMaterial color="#e9bd83" transparent opacity={0.6} />
           </mesh>
           <Html position={[0, 0.2, 0]} center zIndexRange={[12, 0]}>
-            <span className="origin-label">{p.id}</span>
+            <span className="origin-label" title={p.id}>{p.name || "Filed proposal"} · r{p.revision ?? 1}</span>
           </Html>
         </group>
       ))}

@@ -144,6 +144,8 @@ export default function App() {
     error = useMission((s) => s.error),
     loadError = useMission((s) => s.loadError),
     toast = useMission((s) => s.toast),
+    undoSite = useMission((s) => s.undoSite),
+    pickingAsset = useMission((s) => s.pickingAsset),
     terrainError = useMission((s) => s.terrainError);
   useEffect(() => {
     void useMission.getState().load();
@@ -176,11 +178,38 @@ export default function App() {
     const timer = setTimeout(() => void useMission.getState().analyze(), 300);
     return () => clearTimeout(timer);
   }, [connected, revision, missionReady]);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const shortcuts = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        e.ctrlKey || e.metaKey || e.altKey ||
+        (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)))
+      )
+        return;
+      const s = useMission.getState();
+      if (!s.user || ["gateway", "login", "pricing"].includes(s.mode)) return;
+      const key = e.key.toLowerCase();
+      if (key === "?") setShortcutsOpen((v) => !v);
+      else if (key === "1") s.setMode("setup");
+      else if (key === "2" && s.missionReady) s.setMode("operations");
+      else if (key === "3") s.setMode("notices");
+      else if (key === "o" && s.assessment && !s.busy) {
+        s.setMode("optimizer");
+        void s.optimize();
+      } else if (key === "r") s.setMode("report");
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", shortcuts);
+    return () => window.removeEventListener("keydown", shortcuts);
+  }, []);
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        useMission.setState({ placeMode: false });
+        useMission.setState({ placeMode: false, pickingAsset: false });
         document.body.style.cursor = "";
+        setShortcutsOpen(false);
       }
     };
     window.addEventListener("keydown", escape);
@@ -302,6 +331,9 @@ export default function App() {
         <span>
           <span className="status-dot" />
           PLUME / OPERATIONAL PROTOTYPE
+          <button className="footer-shortcuts" onClick={() => setShortcutsOpen(true)}>
+            ? SHORTCUTS
+          </button>
         </span>
         <span>
           {mode === "gateway"
@@ -312,10 +344,36 @@ export default function App() {
           BEYOND 2030 <span className="footer-plus">+</span>
         </span>
       </footer>
+      {pickingAsset && (
+        <div className="pick-hint" role="status">
+          <Icon name="Crosshair" size={16} />
+          Click the terrain to place your new asset
+          <button onClick={() => useMission.setState({ pickingAsset: false })}>Cancel</button>
+        </div>
+      )}
+      {shortcutsOpen && (
+        <div className="shortcuts" role="dialog" aria-label="Keyboard shortcuts" onClick={() => setShortcutsOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <b>Keyboard shortcuts</b>
+            <dl>
+              <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Prepare · Analyze · Coordinate</dd>
+              <dt><kbd>O</kbd></dt><dd>Find alternative landing sites</dd>
+              <dt><kbd>R</kbd></dt><dd>Open the full report</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Cancel map picking / close</dd>
+              <dt><kbd>?</kbd></dt><dd>Show or hide this help</dd>
+            </dl>
+          </div>
+        </div>
+      )}
       {toast && (
         <div className="mission-toast" role="status">
           <Icon name="Check" size={18} />
           {toast}
+          {undoSite && (
+            <button className="toast-undo" onClick={() => useMission.getState().undoAdopt()}>
+              Undo
+            </button>
+          )}
           <button
             className="icon-button"
             aria-label="Dismiss notification"

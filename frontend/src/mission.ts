@@ -136,6 +136,15 @@ interface Mission {
   simulate: () => Promise<void>;
   filePlan: () => Promise<string | null>;
   notify: (text: string) => void;
+  /** Previous touchdown point, offered as "Undo" after adopting a site. */
+  undoSite: { site: Pt; label: string } | null;
+  adoptSite: (site: Pt, label: string) => void;
+  undoAdopt: () => void;
+  /** Plan to open when the user arrives from the notification list. */
+  focusPlanId: string | null;
+  /** Map picking for asset registration. */
+  pickingAsset: boolean;
+  assetPick: Pt | null;
 }
 
 let toastTimer: ReturnType<typeof setTimeout>;
@@ -543,9 +552,33 @@ export const useMission = create<Mission>((set, get) => ({
   },
   notify: (toast) => {
     clearTimeout(toastTimer);
-    set({ toast });
+    set({ toast, undoSite: null });
     toastTimer = setTimeout(() => set({ toast: null }), 6500);
   },
+  undoSite: null,
+  adoptSite: (site, label) => {
+    const previous = get().site;
+    get().moveSite(site, true);
+    get().focus("site");
+    clearTimeout(toastTimer);
+    set({
+      toast: `${label} adopted · reassessing exposure at the new touchdown point.`,
+      undoSite: { site: previous, label },
+    });
+    toastTimer = setTimeout(() => set({ toast: null, undoSite: null }), 9000);
+  },
+  undoAdopt: () => {
+    const u = get().undoSite;
+    if (!u) return;
+    clearTimeout(toastTimer);
+    set({ toast: null, undoSite: null });
+    get().moveSite(u.site, true);
+    get().focus("site");
+    get().notify("Previous touchdown point restored.");
+  },
+  focusPlanId: null,
+  pickingAsset: false,
+  assetPick: null,
 }));
 
 export function elevationAt(

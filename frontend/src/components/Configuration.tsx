@@ -1,6 +1,7 @@
 import { useMission } from "../mission";
 import { Icon } from "./Icon";
 import NumericInput from "./NumericInput";
+import { Term } from "../ui";
 
 export function MissionFields() {
   const meta = useMission((s) => s.meta),
@@ -75,7 +76,7 @@ export function MissionFields() {
       ).map((f) => (
         <label className="parameter" key={f.key}>
           <span>
-            {f.label}
+            <Term>{f.label}</Term>
             <b>
               {lander[f.key].toLocaleString()} <em>{f.unit}</em>
             </b>

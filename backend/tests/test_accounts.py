@@ -205,3 +205,19 @@ class AccountIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OrganizationMembers(AccountIntegration):
+    def test_members_are_scoped_to_own_organization(self):
+        self.assertEqual(self.c.get("/api/organization/members").status_code, 401)
+        owner = self.signup("lead@example.test", company="Members Org")
+        code = owner["organization"]["invite_code"]
+        self.c.post("/api/auth/logout")
+        self.signup("crew@example.test", invite=code)
+        people = self.c.get("/api/organization/members").json()
+        self.assertEqual([p["email"] for p in people], ["lead@example.test", "crew@example.test"])
+        self.assertEqual([p["role"] for p in people], ["admin", "member"])
+        self.assertTrue(all("password" not in str(p) for p in people))
+        self.c.post("/api/auth/logout")
+        self.signup("other@example.test", company="Other Org")
+        self.assertEqual([p["email"] for p in self.c.get("/api/organization/members").json()], ["other@example.test"])

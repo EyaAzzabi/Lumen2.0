@@ -257,3 +257,31 @@ def demo_accounts(store, settings):
                 }
             )
     return out
+
+
+def members(store, organization_id):
+    """People with a password account in one organization (no secrets)."""
+    with store.connect() as c:
+        rows = c.execute(
+            "SELECT a.user_id, a.name, a.email, u.created_at, u.demo FROM accounts a "
+            "JOIN users u ON u.id=a.user_id WHERE a.organization_id=? ORDER BY u.created_at",
+            (organization_id,),
+        ).fetchall()
+        out = []
+        for r in rows:
+            roles = {
+                row[0]
+                for row in c.execute(
+                    "SELECT role FROM memberships WHERE user_id=? AND organization_id=?",
+                    (r["user_id"], organization_id),
+                )
+            }
+            out.append({
+                "id": r["user_id"],
+                "name": r["name"],
+                "email": r["email"],
+                "role": "admin" if "organization_admin" in roles else "member",
+                "joined_at": r["created_at"],
+                "demo": bool(r["demo"]),
+            })
+    return out

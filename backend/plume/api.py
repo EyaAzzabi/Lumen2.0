@@ -384,6 +384,13 @@ def me(request: Request, who: IdentityDep):
     return session(request)
 
 
+@app.get("/api/organization/members")
+def organization_members(who: IdentityDep):
+    """Members of the signed-in user's organization only."""
+    who.require("private:read")
+    return accounts.members(store, who.organization_id)
+
+
 @app.post("/api/auth/logout")
 def account_logout(request: Request, response: APIResponse, who: IdentityDep):
     return logout(request, response, who)

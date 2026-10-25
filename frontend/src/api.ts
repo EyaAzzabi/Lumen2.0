@@ -334,7 +334,17 @@ const filedBody = (p: { window: string; [key: string]: unknown }) => {
     : p;
 };
 
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "member";
+  joined_at: number;
+  demo: boolean;
+}
+
 export const api = {
+  members: () => req<Member[]>("/api/organization/members"),
   onUnauthorized: (callback: () => void) => {
     unauthorized = callback;
   },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, fmtKm, fmtMeur, fmtPct, RISK_COLOR } from "../api";
 import { useMission } from "../mission";
 import { Icon } from "./Icon";
@@ -10,8 +10,10 @@ export function RegistryPanel() {
     meta = useMission((s) => s.meta),
     filter = useMission((s) => s.registryFilter),
     acting = useMission((s) => s.actingId),
-    selected = useMission((s) => s.selectedAsset);
-  const [adding, setAdding] = useState(false),
+    selected = useMission((s) => s.selectedAsset),
+    picking = useMission((s) => s.pickingAsset),
+    pick = useMission((s) => s.assetPick);
+  const [adding, setAdding] = useState(picking),
     [name, setName] = useState(""),
     [type, setType] = useState("solar_array"),
     [value, setValue] = useState("25"),
@@ -19,6 +21,22 @@ export function RegistryPanel() {
     [y, setY] = useState("0"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
+  // A point chosen on the terrain fills the form (map-first registration).
+  useEffect(() => {
+    if (!pick) return;
+    setX(String(pick.x));
+    setY(String(pick.y));
+    setAdding(true);
+    useMission.setState({ assetPick: null });
+  }, [pick]);
+  useEffect(() => {
+    if (picking) setAdding(true);
+  }, [picking]);
+  function pickOnMap() {
+    useMission.setState({ pickingAsset: true, selectedAsset: null });
+    useMission.getState().focus("top");
+  }
+  const owned = assets.filter((a) => a.operator_id === acting).length;
   const visible = assets.filter(
     (a) =>
       (filter.operator === "all" || a.operator_id === filter.operator) &&
@@ -190,6 +208,16 @@ export function RegistryPanel() {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className={`outline-button full ${picking ? "armed" : ""}`}
+              onClick={() =>
+                picking ? useMission.setState({ pickingAsset: false }) : pickOnMap()
+              }
+            >
+              <Icon name="Crosshair" size={15} />
+              {picking ? "Click the terrain… (cancel)" : "Pick the position on the map"}
+            </button>
             <div className="registry-filter-pair">
               <label className="form-label">
                 EAST / m
@@ -239,6 +267,28 @@ export function RegistryPanel() {
               {busy ? "REGISTERING…" : "ADD TO SHARED REGISTRY"}
             </button>
           </form>
+        )}
+        {!owned && !adding && (
+          <div className="teaching-empty">
+            <Icon name="Box" size={22} />
+            <div>
+              <b>Your organization has no registered assets yet.</b>
+              <p>
+                Register your installations so other operators are notified
+                when their landings put them at risk.
+              </p>
+              <button
+                className="outline-button full"
+                disabled={!useMission.getState().session?.permissions.includes("assets:write")}
+                onClick={() => {
+                  setAdding(true);
+                  pickOnMap();
+                }}
+              >
+                <Icon name="Crosshair" size={14} /> Register your first asset
+              </button>
+            </div>
+          </div>
         )}
         <div className="registry-assets">
           {visible.map((a) => {
