@@ -1,3 +1,4 @@
+import ExperienceGuide from "./components/ExperienceGuide";
 import { useDraftAutosave } from "./components/MissionLibrary";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useMission, type Mode } from "./mission";
@@ -154,6 +155,7 @@ export default function App() {
     const initial = location.hash.slice(1);
     const modes = [
       "gateway",
+      "experience",
       "login",
       "pricing",
       "setup",
@@ -241,7 +243,8 @@ export default function App() {
   }, []);
   const legacy = mode === "method";
   const spatial =
-    !legacy && !["report", "gateway", "login", "pricing"].includes(mode);
+    !legacy &&
+    !["report", "gateway", "experience", "login", "pricing"].includes(mode);
   return (
     <div className={`mission-app mode-${mode}`}>
       <Header />
@@ -343,6 +346,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <ExperienceGuide />
       <footer className="flight-footer">
         <span>
           <span className="status-dot" />

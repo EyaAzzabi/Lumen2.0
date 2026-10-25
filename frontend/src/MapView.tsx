@@ -9,25 +9,32 @@ interface Props {
   site: Pt | null;
   dispersion_m?: number;
   optimized?: Pt | null;
+  siteLabel?: string;
+  optimizedLabel?: string;
   footprint?: Footprint | null;
   results?: AssetResult[];
   searchPoints?: [number, number, number | null][] | null;
   onSiteChange?: (p: Pt) => void;
   onPick?: (p: Pt) => void;
   focusAssetId?: string | null;
+  framing?: { points: Pt[]; tick: number };
   busy?: string | null;
   hint?: string | null;
 }
 
-interface View { cx: number; cy: number; s: number } // world centre (m) and pixels per metre
+interface View {
+  cx: number;
+  cy: number;
+  s: number;
+} // world centre (m) and pixels per metre
 
 // Damage fraction -> RGBA. Matches the risk bands: 0.5% low, 3% elevated, 15% critical.
 function rampColor(v: number): [number, number, number, number] {
   if (v < 0.001) return [0, 0, 0, 0];
   const stops: [number, [number, number, number], number][] = [
-    [0.001, [250, 204, 21], 0.10],
+    [0.001, [250, 204, 21], 0.1],
     [0.005, [250, 204, 21], 0.34],
-    [0.03, [251, 146, 60], 0.50],
+    [0.03, [251, 146, 60], 0.5],
     [0.15, [244, 63, 94], 0.62],
     [0.6, [190, 24, 93], 0.78],
   ];
@@ -37,7 +44,12 @@ function rampColor(v: number): [number, number, number, number] {
     const [b, cb, ab] = stops[i + 1];
     if (v <= b) {
       const t = (lv - Math.log10(a)) / (Math.log10(b) - Math.log10(a));
-      return [ca[0] + (cb[0] - ca[0]) * t, ca[1] + (cb[1] - ca[1]) * t, ca[2] + (cb[2] - ca[2]) * t, (aa + (ab - aa) * t) * 255];
+      return [
+        ca[0] + (cb[0] - ca[0]) * t,
+        ca[1] + (cb[1] - ca[1]) * t,
+        ca[2] + (cb[2] - ca[2]) * t,
+        (aa + (ab - aa) * t) * 255,
+      ];
     }
   }
   const last = stops[stops.length - 1];
@@ -45,7 +57,12 @@ function rampColor(v: number): [number, number, number, number] {
 }
 
 const TYPE_GLYPH: Record<string, string> = {
-  habitat: "H", solar_array: "S", isru_plant: "I", comms_relay: "R", telescope: "T", rover: "V",
+  habitat: "H",
+  solar_array: "S",
+  isru_plant: "I",
+  comms_relay: "R",
+  telescope: "T",
+  rover: "V",
 };
 
 export default function MapView(p: Props) {
@@ -55,7 +72,13 @@ export default function MapView(p: Props) {
   const [view, setView] = useState<View>({ cx: 600, cy: -900, s: 0.06 });
   const [hover, setHover] = useState<Pt | null>(null);
   const [dragSite, setDragSite] = useState<Pt | null>(null);
-  const drag = useRef<{ mode: "pan" | "site"; sx: number; sy: number; v: View; moved: boolean } | null>(null);
+  const drag = useRef<{
+    mode: "pan" | "site";
+    sx: number;
+    sy: number;
+    v: View;
+    moved: boolean;
+  } | null>(null);
   const [tick, setTick] = useState(0);
 
   const hill = useMemo(() => {
@@ -64,6 +87,27 @@ export default function MapView(p: Props) {
     img.onload = () => setTick((t) => t + 1);
     return img;
   }, []);
+
+  const frameKey = JSON.stringify(p.framing);
+  useEffect(() => {
+    const points = p.framing?.points;
+    if (!points?.length) return;
+    const xs = points.map((q) => q.x),
+      ys = points.map((q) => q.y);
+    const xmin = Math.min(...xs),
+      xmax = Math.max(...xs),
+      ymin = Math.min(...ys),
+      ymax = Math.max(...ys);
+    setView({
+      cx: (xmin + xmax) / 2,
+      cy: (ymin + ymax) / 2,
+      s:
+        Math.min(
+          size.w / Math.max(3000, xmax - xmin + 2000),
+          size.h / Math.max(3000, ymax - ymin + 2000),
+        ) * 0.8,
+    });
+  }, [frameKey, size.w, size.h]);
 
   // Footprint raster, row 0 = north.
   const fpCanvas = useMemo(() => {
@@ -79,7 +123,10 @@ export default function MapView(p: Props) {
         const v = f.values[r * f.n + col];
         const [R, G, B, A] = rampColor(v);
         const o = ((f.n - 1 - r) * f.n + col) * 4;
-        img.data[o] = R; img.data[o + 1] = G; img.data[o + 2] = B; img.data[o + 3] = A;
+        img.data[o] = R;
+        img.data[o + 1] = G;
+        img.data[o + 2] = B;
+        img.data[o + 3] = A;
       }
     }
     ctx.putImageData(img, 0, 0);
@@ -88,7 +135,9 @@ export default function MapView(p: Props) {
 
   useEffect(() => {
     const el = wrap.current!;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const ro = new ResizeObserver(() =>
+      setSize({ w: el.clientWidth, h: el.clientHeight }),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -98,7 +147,10 @@ export default function MapView(p: Props) {
   useEffect(() => {
     if (!anyCritical) return;
     let raf = 0;
-    const loop = () => { setTick((t) => t + 1); raf = requestAnimationFrame(loop); };
+    const loop = () => {
+      setTick((t) => t + 1);
+      raf = requestAnimationFrame(loop);
+    };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [anyCritical]);
@@ -109,14 +161,20 @@ export default function MapView(p: Props) {
     if (a) setView((v) => ({ ...v, cx: a.x, cy: a.y }));
   }, [p.focusAssetId, p.assets]);
 
-  const toScreen = useCallback((x: number, y: number) => ({
-    x: (x - view.cx) * view.s + size.w / 2,
-    y: size.h / 2 - (y - view.cy) * view.s,
-  }), [view, size]);
-  const toWorld = useCallback((sx: number, sy: number) => ({
-    x: (sx - size.w / 2) / view.s + view.cx,
-    y: (size.h / 2 - sy) / view.s + view.cy,
-  }), [view, size]);
+  const toScreen = useCallback(
+    (x: number, y: number) => ({
+      x: (x - view.cx) * view.s + size.w / 2,
+      y: size.h / 2 - (y - view.cy) * view.s,
+    }),
+    [view, size],
+  );
+  const toWorld = useCallback(
+    (sx: number, sy: number) => ({
+      x: (sx - size.w / 2) / view.s + view.cx,
+      y: (size.h / 2 - sy) / view.s + view.cy,
+    }),
+    [view, size],
+  );
 
   const site = dragSite ?? p.site;
 
@@ -143,10 +201,14 @@ export default function MapView(p: Props) {
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let gx = Math.ceil(t.x_min / step) * step; gx <= t.x_max; gx += step) {
-      const a = toScreen(gx, 0).x; ctx.moveTo(a, tl.y); ctx.lineTo(a, br.y);
+      const a = toScreen(gx, 0).x;
+      ctx.moveTo(a, tl.y);
+      ctx.lineTo(a, br.y);
     }
     for (let gy = Math.ceil(t.y_min / step) * step; gy <= t.y_max; gy += step) {
-      const a = toScreen(0, gy).y; ctx.moveTo(tl.x, a); ctx.lineTo(br.x, a);
+      const a = toScreen(0, gy).y;
+      ctx.moveTo(tl.x, a);
+      ctx.lineTo(br.x, a);
     }
     ctx.stroke();
 
@@ -161,7 +223,9 @@ export default function MapView(p: Props) {
 
     // Optimiser search candidates.
     if (p.searchPoints) {
-      const costs = p.searchPoints.map((q) => q[2]).filter((c): c is number => c !== null);
+      const costs = p.searchPoints
+        .map((q) => q[2])
+        .filter((c): c is number => c !== null);
       const lo = Math.min(...costs);
       const hi = Math.max(...costs);
       for (const [x, y, cst] of p.searchPoints) {
@@ -192,7 +256,13 @@ export default function MapView(p: Props) {
         ctx.globalAlpha = r.risk === "critical" ? 0.35 + 0.5 * pulse : 0.7;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 15 + (r.risk === "critical" ? 6 * pulse : 0), 0, Math.PI * 2);
+        ctx.arc(
+          s.x,
+          s.y,
+          15 + (r.risk === "critical" ? 6 * pulse : 0),
+          0,
+          Math.PI * 2,
+        );
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
@@ -230,14 +300,17 @@ export default function MapView(p: Props) {
       ctx.setLineDash([6, 6]);
       ctx.strokeStyle = "rgba(156,199,255,0.9)";
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
       ctx.setLineDash([]);
       const d = Math.hypot(p.optimized.x - site.x, p.optimized.y - site.y);
       ctx.font = "600 11px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#9cc7ff";
       ctx.textAlign = "center";
       ctx.fillText(fmtKm(d), (a.x + b.x) / 2, (a.y + b.y) / 2 - 8);
-      drawMarker(ctx, b.x, b.y, "#9cc7ff", "OPTIMISED");
+      drawMarker(ctx, b.x, b.y, "#9cc7ff", p.optimizedLabel ?? "CANDIDATE");
     }
     if (site) {
       const s = toScreen(site.x, site.y);
@@ -246,24 +319,43 @@ export default function MapView(p: Props) {
         ctx.setLineDash([3, 4]);
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, Math.max(3 * p.dispersion_m * view.s, 6), 0, Math.PI * 2);
+        ctx.arc(
+          s.x,
+          s.y,
+          Math.max(3 * p.dispersion_m * view.s, 6),
+          0,
+          Math.PI * 2,
+        );
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      drawMarker(ctx, s.x, s.y, "#f2c27b", p.optimized ? "REQUESTED" : "TOUCHDOWN");
+      drawMarker(
+        ctx,
+        s.x,
+        s.y,
+        "#f2c27b",
+        p.siteLabel ?? (p.optimized ? "INITIAL SITE" : "TOUCHDOWN"),
+      );
     }
 
     // Scale bar.
     const target = 120 / view.s;
     const mag = Math.pow(10, Math.floor(Math.log10(target)));
-    const nice = [1, 2, 5, 10].map((m) => m * mag).filter((v) => v <= target).pop() || mag;
+    const nice =
+      [1, 2, 5, 10]
+        .map((m) => m * mag)
+        .filter((v) => v <= target)
+        .pop() || mag;
     const px = nice * view.s;
     ctx.strokeStyle = "#cbd5e1";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(18, size.h - 22); ctx.lineTo(18 + px, size.h - 22);
-    ctx.moveTo(18, size.h - 27); ctx.lineTo(18, size.h - 17);
-    ctx.moveTo(18 + px, size.h - 27); ctx.lineTo(18 + px, size.h - 17);
+    ctx.moveTo(18, size.h - 22);
+    ctx.lineTo(18 + px, size.h - 22);
+    ctx.moveTo(18, size.h - 27);
+    ctx.lineTo(18, size.h - 17);
+    ctx.moveTo(18 + px, size.h - 27);
+    ctx.lineTo(18 + px, size.h - 17);
     ctx.stroke();
     ctx.fillStyle = "#cbd5e1";
     ctx.font = "500 11px 'JetBrains Mono', monospace";
@@ -273,19 +365,38 @@ export default function MapView(p: Props) {
     ctx.textAlign = "center";
     ctx.fillText("N", size.w - 24, 22);
     ctx.beginPath();
-    ctx.moveTo(size.w - 24, 30); ctx.lineTo(size.w - 29, 44); ctx.lineTo(size.w - 19, 44); ctx.closePath();
+    ctx.moveTo(size.w - 24, 30);
+    ctx.lineTo(size.w - 29, 44);
+    ctx.lineTo(size.w - 19, 44);
+    ctx.closePath();
     ctx.fill();
   }, [p, size, view, hill, fpCanvas, tick, site, dragSite, toScreen]);
 
-  function drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, label: string) {
+  function drawMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+    label: string,
+  ) {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(x - 18, y); ctx.lineTo(x - 13, y); ctx.moveTo(x + 13, y); ctx.lineTo(x + 18, y);
-    ctx.moveTo(x, y - 18); ctx.lineTo(x, y - 13); ctx.moveTo(x, y + 13); ctx.lineTo(x, y + 18);
+    ctx.arc(x, y, 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 18, y);
+    ctx.lineTo(x - 13, y);
+    ctx.moveTo(x + 13, y);
+    ctx.lineTo(x + 18, y);
+    ctx.moveTo(x, y - 18);
+    ctx.lineTo(x, y - 13);
+    ctx.moveTo(x, y + 13);
+    ctx.lineTo(x, y + 18);
     ctx.stroke();
     ctx.font = "700 10px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
@@ -317,7 +428,11 @@ export default function MapView(p: Props) {
     if (Math.hypot(sx - d.sx, sy - d.sy) > 4) d.moved = true;
     if (!d.moved) return;
     if (d.mode === "pan") {
-      setView({ ...d.v, cx: d.v.cx - (sx - d.sx) / d.v.s, cy: d.v.cy + (sy - d.sy) / d.v.s });
+      setView({
+        ...d.v,
+        cx: d.v.cx - (sx - d.sx) / d.v.s,
+        cy: d.v.cy + (sy - d.sy) / d.v.s,
+      });
     } else {
       setDragSite(toWorld(sx, sy));
     }
@@ -339,7 +454,10 @@ export default function MapView(p: Props) {
   function onWheel(e: React.WheelEvent) {
     const { sx, sy } = local(e);
     const before = toWorld(sx, sy);
-    const s = Math.min(0.6, Math.max(0.018, view.s * Math.exp(-e.deltaY * 0.0015)));
+    const s = Math.min(
+      0.6,
+      Math.max(0.018, view.s * Math.exp(-e.deltaY * 0.0015)),
+    );
     setView({
       s,
       cx: before.x - (sx - size.w / 2) / s,
@@ -351,23 +469,44 @@ export default function MapView(p: Props) {
     <div className="map" ref={wrap}>
       <canvas
         ref={canvas}
-        style={{ width: size.w, height: size.h, cursor: drag.current?.mode === "site" ? "grabbing" : "crosshair" }}
+        style={{
+          width: size.w,
+          height: size.h,
+          cursor: drag.current?.mode === "site" ? "grabbing" : "crosshair",
+        }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onMouseLeave={() => { drag.current = null; setDragSite(null); setHover(null); }}
+        onMouseLeave={() => {
+          drag.current = null;
+          setDragSite(null);
+          setHover(null);
+        }}
         onWheel={onWheel}
       />
       <div className="map-readout mono">
-        {hover ? `E ${(hover.x / 1000).toFixed(2)} km · N ${(hover.y / 1000).toFixed(2)} km` : p.meta.terrain.label}
+        {hover
+          ? `E ${(hover.x / 1000).toFixed(2)} km · N ${(hover.y / 1000).toFixed(2)} km`
+          : p.meta.terrain.label}
       </div>
-      {p.busy && <div className="map-busy"><span className="spin" />{p.busy}</div>}
+      {p.busy && (
+        <div className="map-busy">
+          <span className="spin" />
+          {p.busy}
+        </div>
+      )}
       {p.hint && <div className="map-hint">{p.hint}</div>}
       {p.footprint && (
         <div className="map-legend">
           <div className="legend-title">Damage to a reference solar array</div>
           <div className="legend-bar" />
-          <div className="legend-ticks mono"><span>0.1%</span><span>0.5%</span><span>3%</span><span>15%</span><span>60%+</span></div>
+          <div className="legend-ticks mono">
+            <span>0.1%</span>
+            <span>0.5%</span>
+            <span>3%</span>
+            <span>15%</span>
+            <span>60%+</span>
+          </div>
         </div>
       )}
     </div>

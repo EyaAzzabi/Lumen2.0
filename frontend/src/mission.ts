@@ -21,6 +21,7 @@ import {
 } from "./api";
 
 export type Mode =
+  | "experience"
   | "gateway"
   | "login"
   | "pricing"
@@ -33,7 +34,15 @@ export type Mode =
   | "notices"
   | "registry"
   | "method";
-export type CameraView = "overview" | "top" | "site" | "asset" | "lander";
+export type CameraView =
+  | "overview"
+  | "top"
+  | "site"
+  | "asset"
+  | "lander"
+  | "original"
+  | "candidate"
+  | "comparison";
 export type Layers = Record<
   "terrain" | "infrastructure" | "zones" | "hazard" | "candidates",
   boolean
@@ -53,7 +62,13 @@ export const phaseAt = (t: number) =>
             ? "Particle dispersion"
             : "Risk assessment";
 
-export const PUBLIC_MODES: Mode[] = ["gateway", "login", "pricing", "method"];
+export const PUBLIC_MODES: Mode[] = [
+  "gateway",
+  "experience",
+  "login",
+  "pricing",
+  "method",
+];
 interface Mission {
   user: User | null;
   organization: Organization | null;
@@ -76,6 +91,7 @@ interface Mission {
   sessionEpoch: number;
   clearPrivate: () => void;
   missionReady: boolean;
+  comparisonSite: Pt | null;
   preview: {
     site: Pt;
     assessment: Assessment;
@@ -162,6 +178,7 @@ interface Mission {
 
 function privateDefaults() {
   return {
+    comparisonSite: null,
     optimizationRunId: null,
     draftId: null,
     draftVersion: 0,
@@ -422,6 +439,7 @@ export const useMission = create<Mission>((set, get) => ({
     }
   },
   missionReady: false,
+  comparisonSite: null,
   preview: null,
   mode: "gateway",
   session: null,

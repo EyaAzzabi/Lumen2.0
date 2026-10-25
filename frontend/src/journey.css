@@ -1088,3 +1088,115 @@
     font-size: 11px;
   }
 }
+
+/* Optional narrative stays alongside the existing operational workspace. */
+.experience-guide {
+  position: absolute;
+  z-index: 38;
+  left: 92px;
+  top: 84px;
+  width: min(340px, calc(100vw - 112px));
+  padding: 18px;
+  border: 1px solid #7792aa55;
+  border-radius: 14px;
+  background: #07111df2;
+  color: #e6edf4;
+  box-shadow: 0 14px 36px #0006;
+  max-height: calc(100% - 110px);
+  overflow: auto;
+}
+.experience-guide h2 {
+  font-size: 21px;
+  line-height: 1.25;
+  margin: 12px 0;
+}
+.experience-guide p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.experience-guide small {
+  font-size: 11px;
+  color: #9bafc1;
+}
+.experience-guide .response-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.guide-toggle {
+  position: absolute;
+  z-index: 38;
+  left: 92px;
+  bottom: 46px;
+  padding: 9px 14px;
+  border: 1px solid #7792aa55;
+  border-radius: 8px;
+  background: #07111dee;
+  color: #c6dce9;
+}
+.mode-experience .experience-guide {
+  top: 96px;
+  left: 224px;
+  width: min(400px, 84vw);
+}
+.experience-guide > small {
+  display: block;
+  margin-top: 10px;
+}
+.experience-guide > .action-text {
+  display: block;
+  margin-top: 8px;
+}
+@media (max-width: 800px) {
+  .experience-guide {
+    left: 12px;
+    top: auto;
+    bottom: 12px;
+    width: calc(100vw - 24px);
+    max-height: 38vh;
+  }
+  .experience-guide.collapsed {
+    width: auto;
+  }
+  .guide-toggle {
+    left: 12px;
+    bottom: 12px;
+  }
+  .mode-experience .experience-guide {
+    left: 6%;
+    top: 12%;
+    bottom: auto;
+    max-height: 70vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .experience-guide,
+  .guide-toggle {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (min-width: 801px) {
+  .experience-guide {
+    left: 224px;
+  }
+  .guide-toggle {
+    left: 224px;
+    bottom: 124px;
+  }
+}
+@media (max-width: 800px) {
+  .mission-toast {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    bottom: 112px;
+    box-sizing: border-box;
+  }
+  .mission-toast > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

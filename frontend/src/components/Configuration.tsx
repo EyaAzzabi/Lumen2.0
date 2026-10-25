@@ -46,88 +46,94 @@ export function MissionFields() {
           ))}
         </select>
       </label>
-      <div className="section-divider" />
-      {(
-        [
-          {
-            key: "thrust_kn",
-            label: "Engine thrust",
-            unit: "kN",
-            min: 1,
-            max: 5000,
-            step: 1,
-          },
-          {
-            key: "hover_s",
-            label: "Low-altitude hover",
-            unit: "s",
-            min: 2,
-            max: 300,
-            step: 1,
-          },
-          {
-            key: "dispersion_m",
-            label: "Landing dispersion",
-            unit: "m",
-            min: 0,
-            max: 2000,
-            step: 10,
-          },
-        ] as const
-      ).map((f) => (
-        <label className="parameter" key={f.key}>
-          <span>
-            <Term>{f.label}</Term>
-            <b>
-              {lander[f.key].toLocaleString()} <em>{f.unit}</em>
-            </b>
-          </span>
-          <input
-            type="range"
-            min={f.min}
-            max={f.max}
-            step={f.step}
-            value={lander[f.key]}
-            onChange={(e) =>
-              useMission.getState().updateLander({
-                [f.key]: +e.target.value,
-                label: "Custom lander",
-              })
-            }
-          />
-          <small>
-            {f.min.toLocaleString()} {f.unit}
+      <p className="panel-note">
+        Spacecraft selections are presets. Select one explicitly to apply its
+        displayed settings.
+      </p>
+      <details className="journey-details" open>
+        <summary>Advanced mission settings</summary>
+        {(
+          [
+            {
+              key: "thrust_kn",
+              label: "Engine thrust",
+              unit: "kN",
+              min: 1,
+              max: 5000,
+              step: 1,
+            },
+            {
+              key: "hover_s",
+              label: "Low-altitude hover",
+              unit: "s",
+              min: 2,
+              max: 300,
+              step: 1,
+            },
+            {
+              key: "dispersion_m",
+              label: "Landing dispersion",
+              unit: "m",
+              min: 0,
+              max: 2000,
+              step: 10,
+            },
+          ] as const
+        ).map((f) => (
+          <label className="parameter" key={f.key}>
             <span>
-              {f.max.toLocaleString()} {f.unit}
+              <Term>{f.label}</Term>
+              <b>
+                {lander[f.key].toLocaleString()} <em>{f.unit}</em>
+              </b>
             </span>
-          </small>
-        </label>
-      ))}
-      <div className="section-divider" />
-      <div className="panel-subtitle">LOCAL TOUCHDOWN COORDINATES</div>
-      <div className="coordinate-inputs">
-        {(["x", "y"] as const).map((k, i) => (
-          <label key={k}>
-            {i ? "NORTH" : "EAST"}
-            <NumericInput
-              label={`${i ? "North" : "East"} coordinate in metres`}
-              min={-15000}
-              max={15000}
-              step={50}
-              value={site[k]}
-              onCommit={(value) =>
-                useMission
-                  .getState()
-                  .moveSite({ ...useMission.getState().site, [k]: value })
+            <input
+              type="range"
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              value={lander[f.key]}
+              onChange={(e) =>
+                useMission.getState().updateLander({
+                  [f.key]: +e.target.value,
+                  label: "Custom lander",
+                })
               }
             />
-            <span>m</span>
+            <small>
+              {f.min.toLocaleString()} {f.unit}
+              <span>
+                {f.max.toLocaleString()} {f.unit}
+              </span>
+            </small>
           </label>
         ))}
-      </div>
-      <p className="panel-note">
-        Local east / north coordinates, not geographic latitude and longitude.
-      </p>
+        <div className="section-divider" />
+        <div className="panel-subtitle">LOCAL TOUCHDOWN COORDINATES</div>
+        <div className="coordinate-inputs">
+          {(["x", "y"] as const).map((k, i) => (
+            <label key={k}>
+              {i ? "NORTH" : "EAST"}
+              <NumericInput
+                label={`${i ? "North" : "East"} coordinate in metres`}
+                min={-15000}
+                max={15000}
+                step={50}
+                value={site[k]}
+                onCommit={(value) =>
+                  useMission
+                    .getState()
+                    .moveSite({ ...useMission.getState().site, [k]: value })
+                }
+              />
+              <span>m</span>
+            </label>
+          ))}
+        </div>
+        <p className="panel-note">
+          Local east / north coordinates, not geographic latitude and longitude.
+        </p>
+      </details>
     </>
   );
 }

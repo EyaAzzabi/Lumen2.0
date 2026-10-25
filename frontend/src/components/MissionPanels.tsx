@@ -656,6 +656,7 @@ export function SceneControls() {
     optimizer: "Landing intelligence",
     report: "Coordination report",
     gateway: "",
+    experience: "Lunar experience",
     notices: "Cross-operator coordination",
     registry: "Shared lunar registry",
     method: "",

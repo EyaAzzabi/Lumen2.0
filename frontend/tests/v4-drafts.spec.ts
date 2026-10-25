@@ -16,7 +16,8 @@ test("organization draft resumes after sign-in, detects conflicts, archives and 
     data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
   });
   await page.goto("/#setup");
-  const name = `Saved draft ${Date.now()}`;
+  const name = `Saved draft ${Date.now()}`,
+    teammateName = `Changed by a teammate ${Date.now()}`;
   await page.getByLabel("MISSION IDENTIFIER").fill(name);
   await page
     .getByRole("button", { name: "Save new draft", exact: true })
@@ -61,7 +62,7 @@ test("organization draft resumes after sign-in, detects conflicts, archives and 
     headers: { "X-Plume-CSRF": session.csrf_token },
     data: {
       expected_version: draft.version,
-      data: { ...draft.data, name: "Changed by a teammate" },
+      data: { ...draft.data, name: teammateName },
     },
   });
   expect(other.ok()).toBeTruthy();
@@ -70,15 +71,13 @@ test("organization draft resumes after sign-in, detects conflicts, archives and 
   await page
     .getByRole("button", { name: "Reload saved version", exact: true })
     .click();
-  await expect(page.getByLabel("MISSION IDENTIFIER")).toHaveValue(
-    "Changed by a teammate",
-  );
+  await expect(page.getByLabel("MISSION IDENTIFIER")).toHaveValue(teammateName);
   await page
     .getByRole("button", { name: "Saved missions", exact: true })
     .click();
   const updated = page
     .locator(".library-item")
-    .filter({ hasText: "Changed by a teammate" });
+    .filter({ hasText: teammateName });
   await updated
     .getByRole("button", { name: "Archive draft", exact: true })
     .click();

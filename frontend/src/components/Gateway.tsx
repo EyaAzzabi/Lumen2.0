@@ -4,13 +4,11 @@ import { Icon, type IconName } from "./Icon";
 export default function Gateway() {
   const connected = useMission((s) => s.connected),
     loadError = useMission((s) => s.loadError),
-    assets = useMission((s) => s.assets),
-    operators = useMission((s) => s.operators),
     reduced = useMission((s) => s.reducedMotion);
   const enter = () => useMission.getState().setMode("setup");
   const startDemo = () => {
-    useMission.setState({ demo: false });
-    enter();
+    useMission.getState().setMode("experience");
+    window.dispatchEvent(new Event("plume:experience"));
   };
   const features: [IconName, string, string, () => void][] = [
     [
@@ -89,24 +87,18 @@ export default function Gateway() {
           LUNAR LANDING COORDINATION PLATFORM
         </div>
         <h1>
-          One Landing.
+          One Moon.
           <br />
-          <span>Everyone’s Safety.</span>
+          <span>Many Missions.</span>
         </h1>
-        <p>
-          Protect what’s already on the Moon.
-          <br />
-          Plan your approach, understand your footprint,
-          <br className="desktop-break" /> and coordinate the next shared
-          frontier.
-        </p>
+        <p>Every landing can affect someone else’s mission.</p>
         <div className="gateway-actions">
           <button
             className="action-primary"
             onClick={enter}
             disabled={!connected}
           >
-            ENTER MISSION CONTROL <Icon name="ArrowRight" size={19} />
+            Enter Mission Control <Icon name="ArrowRight" size={19} />
           </button>
           <button
             className="watch-demo"
@@ -116,7 +108,7 @@ export default function Gateway() {
             <span>
               <Icon name="Play" size={15} />
             </span>
-            Start planning
+            Experience a Landing
           </button>
         </div>
         {loadError && (
@@ -127,24 +119,11 @@ export default function Gateway() {
             </button>
           </div>
         )}
-        <div className="hero-proof">
-          <div>
-            <strong>
-              {connected ? String(assets.length).padStart(2, "0") : "—"}
-            </strong>
-            <span>SHARED INSTALLATIONS</span>
-          </div>
-          <div>
-            <strong>
-              {connected ? String(operators.length).padStart(2, "0") : "—"}
-            </strong>
-            <span>DEMO ORGANIZATIONS</span>
-          </div>
-          <div>
-            <strong>ONE</strong>
-            <span>SHARED OPERATIONAL PICTURE</span>
-          </div>
-        </div>
+        <p className="panel-note">
+          Discover what happens when a spacecraft touches down.
+          <br />
+          Plan, assess and coordinate mission scenarios.
+        </p>
       </section>
       <div className="frontier-timeline">
         <span>THE NEXT CHAPTER</span>

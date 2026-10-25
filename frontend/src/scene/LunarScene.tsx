@@ -598,8 +598,7 @@ function Candidates() {
               rotation={[-Math.PI / 2, 0, 0]}
               onClick={(e) => {
                 e.stopPropagation();
-                useMission.getState().moveSite({ x: c.x, y: c.y }, true);
-                useMission.getState().focus("site");
+                useMission.getState().focus("comparison");
               }}
             >
               <ringGeometry args={[0.18, 0.24, 40]} />
@@ -622,7 +621,7 @@ function Candidates() {
                     )
                 }
               >
-                {i === 0 ? "BEST SITE" : `A${i}`}
+                {i === 0 ? "ADOPT BEST SITE" : `ADOPT A${i}`}
                 {i === 0 && (
                   <small>€{c.expected_loss_meur.toFixed(2)}M loss</small>
                 )}
@@ -738,6 +737,37 @@ function CameraRig() {
     if (mode === "gateway" || mode === "login" || mode === "pricing") {
       target = new Vector3(0.5, 0, 0);
       offset = new Vector3(0, 0.5, 11);
+    } else if (
+      ["original", "candidate", "comparison"].includes(view) &&
+      s.optimization
+    ) {
+      const initial = s.optimization.target.site;
+      const candidate =
+        s.comparisonSite ?? s.optimization.best?.site ?? initial;
+      const point =
+        view === "original"
+          ? initial
+          : view === "candidate"
+            ? candidate
+            : {
+                x: (initial.x + candidate.x) / 2,
+                y: (initial.y + candidate.y) / 2,
+              };
+      target = new Vector3(
+        point.x / 1000,
+        elevationAt(s.terrain, point.x, point.y),
+        -point.y / 1000,
+      );
+      const span =
+        view === "comparison"
+          ? Math.max(
+              4,
+              (Math.hypot(initial.x - candidate.x, initial.y - candidate.y) /
+                1000) *
+                1.4,
+            )
+          : 4;
+      offset = new Vector3(span, span * 0.8, span * 1.2);
     } else if (view === "overview") {
       if (viewpoint === "crater") {
         target = new Vector3(-7.7, -0.6, 5.8);
@@ -998,6 +1028,27 @@ function OperationalFallback({ onRetry }: { onRetry: () => void }) {
     assessment = useMission((s) => s.preview?.assessment ?? s.assessment),
     mode = useMission((s) => s.mode),
     place = useMission((s) => s.placeMode);
+  const opt = useMission((s) => s.optimization),
+    view = useMission((s) => s.cameraView),
+    tick = useMission((s) => s.cameraTick),
+    selected = useMission((s) => s.selectedAsset);
+  const initial = opt?.target.site,
+    candidate = useMission(
+      (s) => s.comparisonSite ?? s.optimization?.best?.site,
+    );
+  const affected = assets.find((a) => a.id === selected);
+  const framePoints =
+    view === "original" && initial
+      ? [initial]
+      : view === "candidate" && candidate
+        ? [candidate]
+        : view === "comparison" && initial && candidate
+          ? [initial, candidate]
+          : view === "asset" && affected
+            ? [affected]
+            : view === "site" || view === "lander"
+              ? [site]
+              : [];
   return (
     <div className="fallback-map">
       {mode === "gateway" ? (
@@ -1015,6 +1066,27 @@ function OperationalFallback({ onRetry }: { onRetry: () => void }) {
             site={site}
             footprint={footprint}
             results={assessment?.assets}
+            optimized={
+              opt
+                ? site.x === initial?.x && site.y === initial?.y
+                  ? candidate
+                  : initial
+                : null
+            }
+            siteLabel={
+              opt
+                ? site.x === initial?.x && site.y === initial?.y
+                  ? "INITIAL SITE"
+                  : "CANDIDATE"
+                : undefined
+            }
+            optimizedLabel={
+              site.x === initial?.x && site.y === initial?.y
+                ? "CANDIDATE"
+                : "INITIAL SITE"
+            }
+            focusAssetId={selected}
+            framing={{ points: framePoints, tick }}
             onSiteChange={(p) => {
               if (useMission.getState().pickingAsset) {
                 useMission.setState({ assetPick: p, pickingAsset: false });

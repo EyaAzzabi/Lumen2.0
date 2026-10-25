@@ -12,3 +12,6 @@ frontend/playwright-report/
 frontend/debug.log
 
 backend/.venv/
+
+# Generated decision-dossier visual verification
+tmp/pdfs/
