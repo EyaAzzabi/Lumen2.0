@@ -201,6 +201,10 @@ def optimize(
                     default=None,
                 ),
                 "worst_risk": s["worst_risk"],
+                "worst_damage_fraction": max(
+                    (r["damage_fraction"] for r in res), default=0.0
+                ),
+                "assets_at_risk": s["assets_at_risk"],
                 "explanation": {
                     "selected_by": "lowest evaluated dispersion-aware damage plus relocation cost",
                     "constraints": {
@@ -258,6 +262,10 @@ def optimize(
                         "slope_deg": sl,
                         "nearest_asset_m": nearest if np.isfinite(nearest) else None,
                         "worst_risk": summary["worst_risk"],
+                        "worst_damage_fraction": max(
+                            (r["damage_fraction"] for r in res), default=0.0
+                        ),
+                        "assets_at_risk": summary["assets_at_risk"],
                         "explanation": {
                             **anchor["explanation"],
                             "local_refinement_step_m": step / 3,

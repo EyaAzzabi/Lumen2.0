@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from . import copilot, planner, auth
+from . import copilot, planner, auth, accounts
 from .contracts import *
 from .budget import computation
 from .database import Conflict
@@ -303,7 +303,10 @@ def session(request: Request):
             "SELECT csrf FROM sessions WHERE id_hash=?",
             (auth.digest(request.cookies[auth.COOKIE]),),
         ).fetchone()
+    account = accounts.public_user(store, who.user_id)
+    view = accounts.account_view(store, who) if account else {}
     return {
+        **view,
         "authenticated": True,
         "demo_enabled": settings.demo,
         "demo": who.demo,
@@ -329,6 +332,61 @@ def logout(request: Request, response: APIResponse, who: IdentityDep):
         )
     response.delete_cookie(auth.COOKIE, path="/")
     return {"ok": True}
+
+
+class SignupIn(Input):
+    model_config = ConfigDict(
+        allow_inf_nan=False, str_strip_whitespace=False, extra="forbid"
+    )
+    name: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=5, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+    organization: Literal["create", "join"]
+    organization_name: str | None = Field(None, max_length=80)
+    invite_code: str | None = Field(None, max_length=40)
+
+
+class LoginIn(Input):
+    model_config = ConfigDict(
+        allow_inf_nan=False, str_strip_whitespace=False, extra="forbid"
+    )
+    email: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.get("/api/auth/demo-accounts")
+def demo_accounts(request: Request):
+    if not settings.demo:
+        return []
+    auth.local_request(request)
+    return accounts.demo_accounts(store, settings)
+
+
+@app.post("/api/auth/signup", response_model=SessionOut)
+def signup(body: SignupIn, request: Request, response: APIResponse):
+    auth.local_request(request)
+    user_id = accounts.signup(body, store)
+    return accounts.session_payload(request, response, store, settings, user_id)
+
+
+@app.post("/api/auth/login", response_model=SessionOut)
+def login(body: LoginIn, request: Request, response: APIResponse):
+    auth.local_request(request)
+    # Provision published demo accounts only when explicitly enabled and locally requested.
+    if body.email.strip().lower().endswith("@plume.demo") and settings.demo:
+        accounts.demo_accounts(store, settings)
+    user_id = accounts.login(body, request, store, settings)
+    return accounts.session_payload(request, response, store, settings, user_id)
+
+
+@app.get("/api/auth/me", response_model=SessionOut)
+def me(request: Request, who: IdentityDep):
+    return session(request)
+
+
+@app.post("/api/auth/logout")
+def account_logout(request: Request, response: APIResponse, who: IdentityDep):
+    return logout(request, response, who)
 
 
 @app.get("/api/meta", response_model=MetaOut)
@@ -518,7 +576,8 @@ def curves():
 
 
 @app.post("/api/copilot/brief", response_model=BriefOut)
-def brief(body: BriefRequest):
+def brief(body: BriefRequest, who: IdentityDep):
+    who.require("private:read")
     a = store.assets()
     with computation():
         base = planner.assess(

@@ -7,6 +7,12 @@ test.beforeEach(async ({ request }) => {
   });
   expect(r.ok()).toBeTruthy();
 });
+test.beforeEach(async ({ page }) => {
+  const r = await page.request.post("/api/auth/login", {
+    data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
+  });
+  expect(r.ok()).toBeTruthy();
+});
 test.beforeAll(async () => {
   await mkdir(output, { recursive: true });
 });
@@ -295,17 +301,10 @@ test("pricing, subscription and login explicitly separate demo from commercial c
     .click();
   await expect(page.locator(".login-card")).toBeVisible();
   await page.screenshot({ path: `${output}/login.png` });
+  await page.locator(".demo-accounts summary").click();
   await page
-    .getByRole("button", { name: "ABOUT ENTERPRISE SSO", exact: true })
-    .click();
-  await expect(page.locator(".sso-info")).toContainText(
-    "does not authenticate",
-  );
-  await page
-    .getByRole("combobox", { name: "DEMO ORGANIZATION", exact: true })
-    .selectOption("aurora");
-  await page
-    .getByRole("button", { name: "ENTER DEMO WORKSPACE", exact: true })
+    .locator(".demo-accounts button")
+    .filter({ hasText: "aurora@plume.demo" })
     .click();
   await expect(
     page.getByRole("combobox", { name: "Acting as operator" }),
@@ -325,6 +324,10 @@ test("WebGL failure, reduced motion, mobile layout and network failure are expli
     reducedMotion: "reduce",
   });
   const page = await context.newPage();
+  const auth = await page.request.post("/api/auth/login", {
+    data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
+  });
+  expect(auth.ok()).toBeTruthy();
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (

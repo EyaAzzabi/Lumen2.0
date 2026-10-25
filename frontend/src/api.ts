@@ -115,6 +115,10 @@ export interface Footprint {
   metadata?: Record<string, unknown>;
 }
 export interface Alternative {
+  worst_risk: Risk;
+  worst_damage_fraction: number;
+  assets_at_risk: number;
+  nearest_asset_m: number | null;
   x: number;
   y: number;
   expected_loss_meur: number;
@@ -204,7 +208,30 @@ export interface Curves {
   };
 }
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  operator_id: string;
+  role: "admin" | "member";
+  demo: boolean;
+}
+export interface Organization extends Operator {
+  invite_code?: string;
+}
+export interface DemoAccount {
+  email: string;
+  organization: string;
+  operator_id: string;
+  password: string;
+}
+export interface AuthSession extends Session {
+  user: User;
+  organization: Organization;
+}
 export interface Session {
+  user?: User;
+  organization?: Organization;
   authenticated: boolean;
   demo_enabled: boolean;
   organization_id?: string;
@@ -232,6 +259,7 @@ export interface PlanDetail {
   coordination: { status: string; safety_certification: boolean };
 }
 let session: Session | null = null;
+let unauthorized: (() => void) | null = null;
 const pendingKeys = new Map<string, string>();
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController(),
@@ -246,17 +274,30 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (idem && !pendingKeys.has(signature))
     pendingKeys.set(signature, crypto.randomUUID());
   try {
-    const res = await fetch(path, {
-      ...init,
-      signal: controller.signal,
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        ...(session?.csrf_token ? { "X-Plume-CSRF": session.csrf_token } : {}),
-        ...(idem ? { "Idempotency-Key": pendingKeys.get(signature)! } : {}),
-        ...(init?.headers || {}),
-      },
-    });
+    let res: Response;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(path, {
+        ...init,
+        signal: controller.signal,
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.csrf_token
+            ? { "X-Plume-CSRF": session.csrf_token }
+            : {}),
+          ...(idem ? { "Idempotency-Key": pendingKeys.get(signature)! } : {}),
+          ...(init?.headers || {}),
+        },
+      });
+      if (
+        res.status !== 429 ||
+        !["/api/assess", "/api/footprint", "/api/optimize"].includes(path) ||
+        attempt >= 5
+      )
+        break;
+      await res.arrayBuffer();
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
     if (!res.ok) {
       let detail = res.statusText;
       try {
@@ -268,6 +309,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       }
       if (res.status >= 400 && res.status < 500 && res.status !== 409)
         pendingKeys.delete(signature);
+      if (
+        res.status === 401 &&
+        session?.authenticated &&
+        !path.startsWith("/api/auth/login")
+      ) {
+        session = null;
+        unauthorized?.();
+      }
       throw new Error(`${res.status} ${detail}`);
     }
     if (idem) pendingKeys.delete(signature);
@@ -286,13 +335,48 @@ const filedBody = (p: { window: string; [key: string]: unknown }) => {
 };
 
 export const api = {
+  onUnauthorized: (callback: () => void) => {
+    unauthorized = callback;
+  },
   session: async () => {
     session = await req<Session>("/api/session");
     return session;
   },
-  demoSession: async (operator_id: string) => {
-    session = await post<Session>("/api/session/demo", { operator_id });
+  login: async (email: string, password: string) => {
+    session = await post<AuthSession>("/api/auth/login", { email, password });
+    return session as AuthSession;
+  },
+  signup: async (body: {
+    name: string;
+    email: string;
+    password: string;
+    organization: "create" | "join";
+    organization_name?: string;
+    invite_code?: string;
+  }) => {
+    session = await post<AuthSession>("/api/auth/signup", body);
+    return session as AuthSession;
+  },
+  me: async () => {
+    session = await req<Session>("/api/auth/me");
     return session;
+  },
+  logout: async () => {
+    const result = await post<{ ok: boolean }>("/api/auth/logout", {});
+    session = null;
+    return result;
+  },
+  demoAccounts: () => req<DemoAccount[]>("/api/auth/demo-accounts"),
+  demoSession: async (operator_id: string) => {
+    const accounts = await req<DemoAccount[]>("/api/auth/demo-accounts");
+    const account = accounts.find((a) => a.operator_id === operator_id);
+    if (!account)
+      throw new Error("This organization requires its own account credentials");
+    session = await post<AuthSession>("/api/auth/login", {
+      email: account.email,
+      password: account.password,
+    });
+    return session as AuthSession;
   },
   planDetail: (id: string) => req<PlanDetail>(`/api/plans/${id}`),
   revisePlan: (

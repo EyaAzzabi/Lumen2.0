@@ -22,7 +22,8 @@ export function OperationsPanel() {
     operators = useMission((s) => s.operators),
     selected = useMission((s) => s.selectedAsset),
     place = useMission((s) => s.placeMode),
-    assessment = useMission((s) => s.assessment);
+    assessment = useMission((s) => s.assessment),
+    organization = useMission((s) => s.organization);
   const [expanded, setExpanded] = useState(true);
   return (
     <aside className="floating-panel operations-panel">
@@ -34,7 +35,7 @@ export function OperationsPanel() {
       </div>
       <div className="panel-content">
         <div className="mission-id">
-          <span>KLL / SURFACE OPERATIONS</span>
+          <span>{organization?.short ?? "PLUME"} / SURFACE OPERATIONS</span>
           <h2>{name || "Untitled mission"}</h2>
           <div className="subtle-tag">PLANNING SCENARIO · 2040</div>
         </div>
@@ -514,6 +515,10 @@ export function OptimizerPanel() {
       </div>
       {opt && (
         <>
+          <details className="panel-section">
+            <summary>Candidate visual comparison</summary>
+            <CandidateComparison />
+          </details>
           <div className="panel-section">
             <div className="search-summary">
               <span>
@@ -763,6 +768,243 @@ export function SceneControls() {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+const LETTERS = ["A", "B", "C"];
+
+function riskWord(r: string) {
+  return r === "negligible"
+    ? "Very low risk"
+    : r === "low"
+      ? "Low risk"
+      : r === "elevated"
+        ? "Elevated risk"
+        : "Critical risk";
+}
+
+function Gauge({ value, color }: { value: number; color: string }) {
+  // Arc length on a square-root scale so small but real damage stays visible.
+  const r = 46,
+    c = 2 * Math.PI * r,
+    f = Math.min(1, Math.sqrt(value / 0.5));
+  return (
+    <svg className="risk-gauge" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r={r} className="gauge-track" />
+      <circle
+        cx="60"
+        cy="60"
+        r={r}
+        className="gauge-value"
+        style={{ stroke: color, strokeDasharray: `${c * f} ${c}` }}
+        transform="rotate(-90 60 60)"
+      />
+    </svg>
+  );
+}
+
+export function CandidateComparison() {
+  const opt = useMission((s) => s.optimization),
+    site = useMission((s) => s.site),
+    busy = useMission((s) => s.busy);
+  const [pick, setPick] = useState(0);
+  if (!opt) return null;
+  const best = opt.best;
+  const candidates = [
+    ...(best
+      ? [
+          {
+            x: best.site.x,
+            y: best.site.y,
+            expected_loss_meur: best.summary.expected_loss_meur,
+            traverse_meur: opt.best_traverse_meur ?? 0,
+            slope_deg: best.site.slope_deg,
+            distance_from_target_m: Math.hypot(
+              best.site.x - opt.target.site.x,
+              best.site.y - opt.target.site.y,
+            ),
+            worst_risk: best.summary.worst_risk,
+            worst_damage_fraction: Math.max(
+              0,
+              ...best.assets.map((a) => a.damage_fraction),
+            ),
+            assets_at_risk: best.summary.assets_at_risk,
+            nearest_asset_m: best.assets.length
+              ? Math.min(...best.assets.map((a) => a.distance_m))
+              : null,
+          },
+        ]
+      : []),
+    ...opt.alternatives,
+  ].slice(0, 3);
+  const original = opt.target.summary;
+  if (!candidates.length)
+    return (
+      <div className="panel-section">
+        <div className="empty-state">
+          <Icon name="TriangleAlert" />
+          <h3>No feasible site found</h3>
+          <p>
+            Adjust the search radius, slope or clearance constraints and run
+            again.
+          </p>
+        </div>
+      </div>
+    );
+  const sel = candidates[Math.min(pick, candidates.length - 1)];
+  const letter = LETTERS[Math.min(pick, candidates.length - 1)];
+  const color = RISK_COLOR[sel.worst_risk];
+  const adopted = Math.hypot(sel.x - site.x, sel.y - site.y) < 1;
+  const reduction =
+    original.expected_loss_meur > 0
+      ? 1 - sel.expected_loss_meur / original.expected_loss_meur
+      : 0;
+  const adopt = (simulate: boolean) => {
+    const s = useMission.getState();
+    s.moveSite({ x: sel.x, y: sel.y }, true);
+    s.focus("site");
+    if (simulate) void s.simulate();
+    else
+      s.notify(
+        `Site ${letter} confirmed. Reassessing exposure at the new coordinates.`,
+      );
+  };
+  return (
+    <>
+      <div className="panel-section">
+        <div className="panel-subtitle row between">
+          CANDIDATE SITES COMPARISON
+          <span className="mono faint">
+            {opt.search.candidates.toLocaleString()} screened ·{" "}
+            {(opt.compute_ms / 1000).toFixed(1)} s
+          </span>
+        </div>
+        <div className="site-cards">
+          {candidates.map((c, i) => {
+            const col = RISK_COLOR[c.worst_risk];
+            return (
+              <button
+                key={i}
+                className={`site-card ${i === pick ? "selected" : ""}`}
+                style={{ ["--site" as string]: col }}
+                onClick={() => setPick(i)}
+              >
+                <span className="site-letter">{LETTERS[i]}</span>
+                <span className="site-risk">{riskWord(c.worst_risk)}</span>
+                <dl>
+                  <dt>Worst</dt>
+                  <dd style={{ color: col }}>
+                    {fmtPct(c.worst_damage_fraction)}
+                  </dd>
+                  <dt>Loss</dt>
+                  <dd>{fmtMeur(c.expected_loss_meur)}</dd>
+                  <dt>Slope</dt>
+                  <dd>{c.slope_deg.toFixed(1)}°</dd>
+                  <dt>Nearest</dt>
+                  <dd>
+                    {c.nearest_asset_m != null ? fmtKm(c.nearest_asset_m) : "—"}
+                  </dd>
+                </dl>
+                <span className="site-select">Select site {LETTERS[i]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="panel-section">
+        <div className="panel-subtitle">RISK ANALYSIS (SELECTED SITE)</div>
+        <div className="site-verdict">
+          <span className="site-letter" style={{ ["--site" as string]: color }}>
+            {letter}
+          </span>
+          <div>
+            <b style={{ color }}>
+              Site {letter} —{" "}
+              {pick === 0 ? "Best evaluated choice" : `Alternative ${pick}`}
+            </b>
+            <small>
+              {pick === 0
+                ? "Lowest total objective: neighbour losses + surface logistics."
+                : "Alternative evaluated objective."}
+            </small>
+          </div>
+        </div>
+        <div className="gauge-row">
+          <div className="gauge-wrap">
+            <Gauge value={sel.worst_damage_fraction} color={color} />
+            <div className="gauge-label">
+              <b>{fmtPct(sel.worst_damage_fraction)}</b>
+              <small>worst-asset damage</small>
+            </div>
+          </div>
+          <ul className="gauge-legend">
+            <li>
+              <i style={{ background: color }} /> Expected loss{" "}
+              <b>{fmtMeur(sel.expected_loss_meur)}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--ice)" }} /> Assets at elevated+{" "}
+              <b>{sel.assets_at_risk}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--gold)" }} /> Surface logistics{" "}
+              <b>{fmtMeur(sel.traverse_meur)}</b>
+            </li>
+            <li>
+              <i style={{ background: "var(--ok)" }} /> Vs requested site{" "}
+              <b>{(reduction * 100).toFixed(1)}% less loss</b>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div className="panel-section">
+        <div className="panel-subtitle">IMPACT PREVIEW</div>
+        <dl className="data-list">
+          <dt>Requested site loss</dt>
+          <dd style={{ color: RISK_COLOR[original.worst_risk] }}>
+            {fmtMeur(original.expected_loss_meur)} · {original.worst_risk}
+          </dd>
+          <dt>Moved from requested</dt>
+          <dd>{fmtKm(sel.distance_from_target_m)}</dd>
+          <dt>Distance to nearest asset</dt>
+          <dd>
+            {sel.nearest_asset_m != null ? fmtKm(sel.nearest_asset_m) : "—"}
+          </dd>
+          <dt>Coordinates (E / N)</dt>
+          <dd>
+            {(sel.x / 1000).toFixed(2)} / {(sel.y / 1000).toFixed(2)} km
+          </dd>
+        </dl>
+        <button
+          className="confirm-site"
+          disabled={adopted || !!busy}
+          onClick={() => adopt(false)}
+        >
+          {adopted
+            ? `Site ${letter} is the current landing site`
+            : `Confirm Site ${letter}`}
+          <Icon name={adopted ? "Check" : "ArrowRight"} size={18} />
+        </button>
+        <button
+          className="outline-button full"
+          disabled={!!busy}
+          onClick={() => adopt(true)}
+        >
+          <Icon name="Play" size={15} /> RUN DETAILED SIMULATION
+        </button>
+        <button
+          className="action-text full"
+          onClick={() => {
+            useMission
+              .getState()
+              .moveSite({ x: opt.target.site.x, y: opt.target.site.y }, true);
+            useMission.getState().focus("site");
+          }}
+        >
+          <Icon name="ArrowLeft" size={15} /> COMPARE REQUESTED SITE
+        </button>
+      </div>
     </>
   );
 }

@@ -1,4 +1,10 @@
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  const r = await page.request.post("/api/auth/login", {
+    data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
+  });
+  expect(r.ok()).toBeTruthy();
+});
 test("V2 browser: objection, optimizer, same-plan revision, acknowledgement and historical evidence", async ({
   page,
 }) => {

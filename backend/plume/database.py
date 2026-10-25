@@ -96,7 +96,15 @@ class Store:
                             "backup": str(backup),
                             "counts": {
                                 k: len(data[k])
-                                for k in ("operators", "assets", "plans", "notices")
+                                for k in (
+                                    "operators",
+                                    "assets",
+                                    "plans",
+                                    "notices",
+                                    "users",
+                                    "sessions",
+                                )
+                                if k in data
                             },
                             "verified": True,
                         },
@@ -144,6 +152,8 @@ class Store:
             "assets",
             "plans",
             "notices",
+            "users",
+            "sessions",
         }:
             raise ValueError(
                 "Migration contains unsupported top-level collections; explicit mapping required"
@@ -267,6 +277,86 @@ class Store:
                         ),
                     ),
                 )
+        # Eya's legacy JSON account store is optional, but never discarded.
+        from .passwords import new_token
+
+        for org in data["operators"]:
+            if org.get("invite_code"):
+                c.execute(
+                    "INSERT INTO organization_invites VALUES(?,?)",
+                    (org["id"], org["invite_code"]),
+                )
+        legacy_users = data.get("users", [])
+        legacy_sessions = data.get("sessions", [])
+        if not isinstance(legacy_users, list) or not isinstance(legacy_sessions, list):
+            raise ValueError("Legacy accounts/sessions must be lists")
+        by_id = {}
+        for user in legacy_users:
+            required = (
+                "id",
+                "email",
+                "name",
+                "password_hash",
+                "operator_id",
+                "created_at",
+                "role",
+                "demo",
+            )
+            if not isinstance(user, dict) or not all(k in user for k in required):
+                raise ValueError("Malformed legacy account")
+            if (
+                user["role"] not in ("admin", "member")
+                or user["operator_id"] not in organizations
+            ):
+                raise ValueError("Invalid legacy membership: " + user["id"])
+            c.execute(
+                "INSERT INTO users VALUES(?,?,?)",
+                (user["id"], int(user["demo"]), user["created_at"]),
+            )
+            c.execute(
+                "INSERT INTO accounts VALUES(?,?,?,?,?)",
+                (
+                    user["id"],
+                    user["email"].strip().lower(),
+                    user["name"],
+                    user["password_hash"],
+                    user["operator_id"],
+                ),
+            )
+            roles = (
+                ("organization_admin",)
+                if user["role"] == "admin"
+                else ("mission_operator", "asset_manager", "reviewer")
+            )
+            for role in roles:
+                c.execute(
+                    "INSERT INTO memberships VALUES(?,?,?)",
+                    (user["id"], user["operator_id"], role),
+                )
+            by_id[user["id"]] = user
+        for session in legacy_sessions:
+            if (
+                not isinstance(session, dict)
+                or not all(
+                    k in session for k in ("user_id", "token_hash", "expires_at")
+                )
+                or session["user_id"] not in by_id
+            ):
+                raise ValueError("Malformed legacy session")
+            c.execute(
+                "INSERT INTO sessions VALUES(?,?,?,?,?)",
+                (
+                    session["token_hash"],
+                    session["user_id"],
+                    by_id[session["user_id"]]["operator_id"],
+                    new_token(),
+                    session["expires_at"],
+                ),
+            )
+        if "users" in data:
+            self._meta(c, "legacy_account_payloads", legacy_users)
+        if "sessions" in data:
+            self._meta(c, "legacy_session_payloads", legacy_sessions)
         self._meta(c, "initialized", {"at": time.time()})
 
     @staticmethod
@@ -283,6 +373,18 @@ class Store:
             }
             if got != {r["id"]: r for r in data[key]}:
                 raise ValueError("Migration verification failed: " + key)
+        for key, archive in (
+            ("users", "legacy_account_payloads"),
+            ("sessions", "legacy_session_payloads"),
+        ):
+            if key in data:
+                row = c.execute(
+                    "SELECT payload FROM metadata WHERE key=?", (archive,)
+                ).fetchone()
+                if not row or json.loads(row[0]) != data[key]:
+                    raise ValueError(
+                        "Legacy account archive verification failed: " + key
+                    )
         if c.execute("PRAGMA foreign_key_check").fetchall():
             raise ValueError("Migration foreign key check failed")
 
@@ -294,7 +396,10 @@ class Store:
             ]
 
     def operators(self):
-        return self._list("organizations")
+        return [
+            {k: v for k, v in org.items() if k != "invite_code"}
+            for org in self._list("organizations")
+        ]
 
     def operator(self, op_id):
         return next((o for o in self.operators() if o["id"] == op_id), None)

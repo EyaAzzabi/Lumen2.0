@@ -126,3 +126,7 @@ immutable revisions, response/event history, current-registry reassessment and
 withdrawal. The report files a revision of its selected plan, with a separate
 new-plan action and structured UTC windows. The UI refreshes every10seconds
 while visible and idle, without external notification delivery.
+
+Account menu, sign-in/registration, asset search, notification bell and the
+expandable candidate comparison from Eya's template branch are merged with the
+cinematic map/hangar. Cookies and V2 revision history remain. See AUTH_MERGE.md.

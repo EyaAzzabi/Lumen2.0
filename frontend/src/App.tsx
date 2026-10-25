@@ -5,6 +5,12 @@ import {
   REPLAY_DURATION,
   type Mode,
 } from "./mission";
+import Auth from "./components/Auth";
+import {
+  AccountMenu,
+  AssetSearch,
+  NotificationBell,
+} from "./components/Chrome";
 import Gateway from "./components/Gateway";
 import Configuration from "./components/Configuration";
 import {
@@ -16,7 +22,7 @@ import {
 import Timeline from "./components/Timeline";
 import Report from "./components/Report";
 import { Icon, type IconName } from "./components/Icon";
-import { Login, Pricing, SubscriptionInfo } from "./components/Commercial";
+import { Pricing, SubscriptionInfo } from "./components/Commercial";
 import { RegistryPanel, RegistryDetail } from "./components/SharedRegistry";
 import Coordination, { CommandOverview } from "./components/Coordination";
 import { api } from "./api";
@@ -57,10 +63,12 @@ function Header() {
     connected = useMission((s) => s.connected),
     operators = useMission((s) => s.operators),
     acting = useMission((s) => s.actingId),
-    demo = useMission((s) => s.demo);
+    demo = useMission((s) => s.demo),
+    user = useMission((s) => s.user),
+    session = useMission((s) => s.session);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const publicMode = ["gateway", "pricing", "login"].includes(mode);
-  const startDemo = () => {
+  const startDemo = async () => {
     const s = useMission.getState(),
       p = s.meta?.landers.find((p) => p.id === "superheavy");
     if (p)
@@ -74,7 +82,8 @@ function Header() {
         p.id,
       );
     s.moveSite(DEFAULT_SITE);
-    s.switchOperator("kestrel");
+    await s.switchOperator("kestrel");
+    if (!useMission.getState().user?.demo) return;
     useMission.setState({
       missionName: "KLL Cargo-7",
       demo: true,
@@ -149,24 +158,29 @@ function Header() {
           {connected ? "BACKEND CONNECTED" : "CONNECTING"}
         </div>
         <Clock />
+        {!publicMode && <AssetSearch />}
         {!publicMode && (
           <>
-            <label className="operator-switch">
-              <span>DEMO ORGANIZATION</span>
-              <select
-                aria-label="Acting as operator"
-                value={acting}
-                onChange={(e) =>
-                  useMission.getState().switchOperator(e.target.value)
-                }
-              >
-                {operators.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {user?.demo && session?.demo_enabled && (
+              <label className="operator-switch">
+                <span>DEMO ORGANIZATION</span>
+                <select
+                  aria-label="Acting as operator"
+                  value={acting}
+                  onChange={(e) =>
+                    useMission.getState().switchOperator(e.target.value)
+                  }
+                >
+                  {operators.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <NotificationBell />
+            <AccountMenu />
             <button
               className="subscription-badge"
               onClick={() => setSubscriptionOpen(true)}
@@ -178,7 +192,7 @@ function Header() {
         )}
         <button
           className={`demo-button ${demo ? "active" : ""}`}
-          disabled={!connected}
+          disabled={!connected || !session?.demo_enabled}
           onClick={() =>
             demo ? useMission.setState({ demo: false }) : startDemo()
           }
@@ -515,7 +529,7 @@ export default function App() {
         {mode === "gateway" ? (
           <Gateway />
         ) : mode === "login" ? (
-          <Login />
+          <Auth />
         ) : mode === "pricing" ? (
           <Pricing />
         ) : (

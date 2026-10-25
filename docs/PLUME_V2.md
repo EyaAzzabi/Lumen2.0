@@ -348,3 +348,12 @@ large-registry optimizer SLA; the cooperative budget rejects excessive work.
 Twenty concurrent fixture registrations and eight concurrent retries of the same
 consultation response are covered by tests. Per-process capacity is not a
 substitute for distributed rate limiting in a future public deployment.
+
+## Eya authentication integration
+
+The former V2 demo-only UI has been superseded by Eya's real local password
+signup/login/logout and create/join-organization flows. The SQLite repository,
+permissions, immutable revisions and CSRF cookie sessions remain. Migration003
+adds accounts/invitations without deleting V2 records. There is no automatic
+Kestrel impersonation at frontend startup. Demo sign-ins remain opt-in/local;
+production remains deliberately fail-closed. Details: [AUTH_MERGE.md](AUTH_MERGE.md).

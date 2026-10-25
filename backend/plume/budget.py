@@ -20,7 +20,11 @@ def check():
 @contextmanager
 def computation(seconds=20):
     if not _slots.acquire(blocking=False):
-        raise HTTPException(429, "Computation capacity occupied; retry later")
+        raise HTTPException(
+            429,
+            "Computation capacity occupied; retry later",
+            headers={"Retry-After": "1"},
+        )
     token = _deadline.set(time.monotonic() + seconds)
     try:
         yield

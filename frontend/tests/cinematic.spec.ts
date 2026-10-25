@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
+test.beforeEach(async ({ page }) => {
+  const r = await page.request.post("/api/auth/login", {
+    data: { email: "kestrel@plume.demo", password: "plume-demo-2040" },
+  });
+  expect(r.ok()).toBeTruthy();
+});
 test("cinematic scenes respond to camera, search, layers, visual modes and direct login navigation", async ({
   page,
 }) => {

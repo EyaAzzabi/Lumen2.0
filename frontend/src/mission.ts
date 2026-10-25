@@ -14,6 +14,9 @@ import {
   type Pt,
   type TerrainMesh,
   type Session,
+  type User,
+  type Organization,
+  type AuthSession,
 } from "./api";
 
 export type Mode =
@@ -49,7 +52,17 @@ export const phaseAt = (t: number) =>
             ? "Particle dispersion"
             : "Risk assessment";
 
+export const PUBLIC_MODES: Mode[] = ["gateway", "login", "pricing", "method"];
 interface Mission {
+  user: User | null;
+  organization: Organization | null;
+  authChecked: boolean;
+  afterLogin: Mode;
+  applySession: (session: AuthSession) => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (body: Parameters<typeof api.signup>[0]) => Promise<void>;
+  signOut: () => Promise<void>;
+
   mode: Mode;
   session: Session | null;
   editingPlanId: string | null;
@@ -120,6 +133,49 @@ interface Mission {
 
 let toastTimer: ReturnType<typeof setTimeout>;
 export const useMission = create<Mission>((set, get) => ({
+  user: null,
+  organization: null,
+  authChecked: false,
+  afterLogin: "operations",
+  applySession: (session) =>
+    set({
+      session,
+      user: session.user,
+      organization: session.organization,
+      actingId: session.organization_id!,
+      plans: [],
+      notices: [],
+      editingPlanId: null,
+      editingRevision: null,
+      coordinationError: null,
+    }),
+  signIn: async (email, password) => {
+    get().applySession(await api.login(email, password));
+    await get().refresh();
+  },
+  signUp: async (body) => {
+    get().applySession(await api.signup(body));
+    await get().refresh();
+  },
+  signOut: async () => {
+    try {
+      await api.logout();
+    } finally {
+      set({
+        session: null,
+        user: null,
+        organization: null,
+        plans: [],
+        notices: [],
+        editingPlanId: null,
+        editingRevision: null,
+        demo: false,
+        playing: false,
+        busy: null,
+      });
+      get().setMode("gateway");
+    }
+  },
   mode: "gateway",
   session: null,
   editingPlanId: null,
@@ -186,6 +242,10 @@ export const useMission = create<Mission>((set, get) => ({
   maxSlope: 8,
   clearance: 300,
   setMode: (mode) => {
+    if (get().authChecked && !get().user && !PUBLIC_MODES.includes(mode)) {
+      set({ afterLogin: mode });
+      mode = "login";
+    }
     const previous = get().mode;
     set({ mode, placeMode: false });
     history.replaceState(null, "", `#${mode}`);
@@ -207,11 +267,16 @@ export const useMission = create<Mission>((set, get) => ({
         api.operators(),
       ]);
       set({ meta, assets, operators, connected: true });
-      let session = await api.session();
-      if (!session.authenticated && session.demo_enabled)
-        session = await api.demoSession("kestrel");
-      set({ session, actingId: session.organization_id ?? "kestrel" });
-      if (session.authenticated) void get().refresh();
+      const session = await api.session();
+      set({
+        session,
+        user: session.user ?? null,
+        organization: session.organization ?? null,
+        actingId: session.organization_id ?? "kestrel",
+        authChecked: true,
+      });
+      if (session.user) void get().refresh();
+      else if (!PUBLIC_MODES.includes(get().mode)) get().setMode(get().mode);
     } catch (e) {
       set({
         connected: false,
@@ -230,10 +295,11 @@ export const useMission = create<Mission>((set, get) => ({
     const actingId = get().actingId;
     if (!get().session?.authenticated) return;
     try {
-      const [assets, plans, notices] = await Promise.all([
+      const [assets, plans, notices, operators] = await Promise.all([
         api.assets(),
         api.plans(),
         api.notices(actingId),
+        api.operators(),
       ]);
       if (get().actingId !== actingId) return;
       const changed = JSON.stringify(assets) !== JSON.stringify(get().assets);
@@ -241,6 +307,7 @@ export const useMission = create<Mission>((set, get) => ({
         assets,
         plans,
         notices,
+        operators,
         coordinationError: null,
         refreshKey: s.refreshKey + 1,
         ...(changed
@@ -268,6 +335,8 @@ export const useMission = create<Mission>((set, get) => ({
       const session = await api.demoSession(actingId);
       set((s) => ({
         session,
+        user: session.user ?? null,
+        organization: session.organization ?? null,
         actingId: session.organization_id!,
         notices: [],
         plans: [],
@@ -480,3 +549,18 @@ export function elevationAt(
     1000
   );
 }
+
+api.onUnauthorized(() => {
+  useMission.setState({
+    session: null,
+    user: null,
+    organization: null,
+    plans: [],
+    notices: [],
+    editingPlanId: null,
+    editingRevision: null,
+    busy: null,
+    demo: false,
+  });
+  useMission.getState().setMode("login");
+});

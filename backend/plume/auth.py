@@ -152,9 +152,6 @@ def create_session(request, response, store, settings, organization):
 
 
 def identity(request, store, settings, csrf=True):
-    if not settings.demo:
-        raise HTTPException(401, "Authentication required; local demo is disabled")
-    local_request(request)
     token = request.cookies.get(COOKIE)
     with store.connect() as c:
         row = c.execute(
@@ -163,6 +160,18 @@ def identity(request, store, settings, csrf=True):
         ).fetchone()
         if not row:
             raise HTTPException(401, "Authentication required")
+        user = c.execute(
+            "SELECT demo FROM users WHERE id=?", (row["user_id"],)
+        ).fetchone()
+        is_demo = bool(user[0])
+        if is_demo:
+            if not settings.demo:
+                raise HTTPException(401, "Demo authentication is disabled")
+            local_request(request)
+        else:
+            origin = request.headers.get("origin")
+            if origin and urlparse(origin).netloc != request.url.netloc:
+                raise HTTPException(403, "Cross-origin request denied")
         roles = tuple(
             r[0]
             for r in c.execute(
@@ -178,4 +187,4 @@ def identity(request, store, settings, csrf=True):
         )
     ):
         raise HTTPException(403, "CSRF token required")
-    return Identity(row["user_id"], row["organization_id"], roles)
+    return Identity(row["user_id"], row["organization_id"], roles, is_demo)

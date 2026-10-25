@@ -66,3 +66,13 @@ backend proxy, and opens http://127.0.0.1:5174/#gateway. Use `-NoBrowser` to kee
 the browser unchanged. Logs and process IDs are in `backend/data/runtime/`
 (ignored by Git). Dependencies must already be installed as described above.
 Node starts Vite directly so closing an npm terminal is unnecessary.
+
+## Merged account authentication
+
+The `feature/auth-and-template-ui` account flows are integrated with V2 SQLite
+and permission checks. Open Log in to sign in, create an organization or join via
+an invitation. Accounts persist; passwords use Eya's salted PBKDF2-SHA256 helper.
+Sessions use HttpOnly cookies and CSRF rather than browser localStorage tokens.
+The six published demo accounts remain opt-in and loopback-only. There is no
+silent Kestrel sign-in. See [merge notes](docs/AUTH_MERGE.md) for the exact conflict
+resolutions and deployment limits. Existing V2 production fail-closed rules stay.
