@@ -12,6 +12,8 @@ export default function PlanHistory({ planId }: { planId: string }) {
   useEffect(() => {
     let live = true;
     setError("");
+    setDetail(null);
+    setCurrent(null);
     void api
       .planDetail(planId)
       .then((d) => {
@@ -92,6 +94,11 @@ export default function PlanHistory({ planId }: { planId: string }) {
               <p className="panel-note">
                 E {r.site.x.toFixed(1)} / N {r.site.y.toFixed(1)} m Â· {r.window}
               </p>
+              <p className="panel-note">PLUME Coordination Decision Dossier · persisted revision {r.revision ?? 1}</p>
+              <div className="response-actions">
+                <a className="outline-button" href={`/api/plans/${encodeURIComponent(planId)}/revisions/${r.revision ?? 1}/dossier?format=pdf`}>Download PDF dossier</a>
+                <a className="outline-button" href={`/api/plans/${encodeURIComponent(planId)}/revisions/${r.revision ?? 1}/dossier?format=json`}>Download structured data</a>
+              </div>
               {r.historical_assessment?.assessment ? (
                 <>
                   <p className="panel-note">

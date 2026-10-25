@@ -86,6 +86,31 @@ class ConstraintTests(unittest.TestCase):
         self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual(len(api.store.revisions(p['id'])), 1)
 
+    def test_filing_rejects_registry_race(self):
+        from unittest.mock import patch
+        import json
+        self.login('kestrel')
+        real = api.planner.assess
+        def changed(*args, **kwargs):
+            result = real(*args, **kwargs)
+            asset = api.store.assets()[0]
+            asset['value_meur'] += 1
+            with api.store.transaction() as c:
+                c.execute('UPDATE assets SET payload=? WHERE id=?', (json.dumps(asset), asset['id']))
+            return result
+        with patch.object(api.planner, 'assess', side_effect=changed):
+            response = self.post('/api/plans', self.body)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(api.store.plans(), [])
+
+    def test_low_and_high_exposure_are_model_outputs(self):
+        high = self.post('/api/assess', {k:self.body[k] for k in ('lander','site')})
+        low = self.post('/api/assess', dict(lander=dict(label='Light preset',thrust_kn=4,hover_s=10,dispersion_m=20),site=dict(x=12000,y=12000)))
+        self.assertEqual(high.status_code,200,high.text)
+        self.assertEqual(low.status_code,200,low.text)
+        self.assertGreater(high.json()['summary']['expected_loss_meur'],low.json()['summary']['expected_loss_meur'])
+        self.assertEqual(low.json()['summary']['assets_at_risk'],0)
+
 
 if __name__ == '__main__':
     unittest.main()

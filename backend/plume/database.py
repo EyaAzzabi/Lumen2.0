@@ -575,6 +575,12 @@ class Store:
         with self.transaction() as c:
 
             def write():
+                if "assets" in snapshot:
+                    current_assets = [json.loads(r[0]) for r in c.execute(
+                        "SELECT payload FROM assets WHERE deleted_at IS NULL"
+                    )]
+                    if sorted(current_assets, key=lambda a: a["id"]) != sorted(snapshot["assets"], key=lambda a: a["id"]):
+                        raise Conflict("Registry changed during evaluation; reassess before filing")
                 if draft_id:
                     draft = c.execute(
                         "SELECT * FROM mission_drafts WHERE id=? AND organization_id=?",
@@ -606,6 +612,16 @@ class Store:
                     )
                     if expected_revision != current:
                         raise Conflict("Stale revision; reload current plan")
+                    if "coordination_constraints" in snapshot:
+                        active = []
+                        for r in c.execute("SELECT payload FROM notices WHERE plan_id=?", (plan_id,)):
+                            notice = json.loads(r[0])
+                            if notice.get("revision", 1) == current and notice["status"] != "acknowledged":
+                                active.extend(dict(rule, source_notice_id=notice["id"], source_revision=current)
+                                              for rule in notice.get("constraints", []))
+                        evaluated = [rule for rule in snapshot["coordination_constraints"] if rule.get("source_notice_id")]
+                        if sorted(map(encode, active)) != sorted(map(encode, evaluated)):
+                            raise Conflict("Objections changed during evaluation; reassess before filing")
                     number = current + 1
                 else:
                     number = 1

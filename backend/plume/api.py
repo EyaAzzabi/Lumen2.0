@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from . import copilot, planner, auth, accounts, drafts, coordination
+from . import copilot, planner, auth, accounts, drafts, coordination, dossier
 from .contracts import *
 from .budget import computation
 from .database import Conflict
@@ -869,6 +869,13 @@ def file_plan(body, who, key, plan_id=None, draft=None):
     constraint_evaluation = coordination.evaluate(
         result["assets"], body.site.x, body.site.y, a, rules
     )
+    if optimization_evidence:
+        limits = optimization_evidence["inputs"]
+        clearance = limits["clearance_m"] + limits.get("dispersion_margin_sigma", 0) * body.lander.dispersion_m
+        nearest = min((float(((body.site.x - asset["x"]) ** 2 +
+                              (body.site.y - asset["y"]) ** 2) ** .5) for asset in a), default=float("inf"))
+        if result["site"]["slope_deg"] > limits["max_slope_deg"] or nearest < clearance:
+            raise HTTPException(422, "Current registry or terrain violates optimization slope/clearance limits; recalculate")
     if not constraint_evaluation["satisfied"]:
         raise HTTPException(
             422,
@@ -940,6 +947,9 @@ def file_plan(body, who, key, plan_id=None, draft=None):
         if prior and prior["status"] != "acknowledged":
             notice["constraints"] = prior.get("constraints", [])
     snapshot = {
+        "organization": next((o for o in store.operators() if o['id'] == who.organization_id), None),
+        "consultations_at_filing": [dict(n, response_history=store.responses(n['id']))
+            for n in store.notices() if n['plan_id'] == plan_id] if plan_id else [],
         "coordination_constraints": rules,
         "constraint_evaluation": constraint_evaluation,
         "optimization": optimization_evidence,
@@ -991,6 +1001,11 @@ def plan_detail(plan_id: str, who: IdentityDep):
         notice["response_history"] = store.responses(notice["id"])
     for row in rows:
         row["historical_assessment"] = store.assessment(row["revision_id"])
+        if row["historical_assessment"] and p["operator_id"] != who.organization_id:
+            historical = row["historical_assessment"]
+            if "consultations_at_filing" in historical:
+                historical["consultations_at_filing"] = [n for n in historical["consultations_at_filing"]
+                    if n["to_operator_id"] == who.organization_id]
         row["immutable_inputs"] = True
     return {
         "plan": p,
@@ -1007,6 +1022,49 @@ def plan_detail(plan_id: str, who: IdentityDep):
             "safety_certification": False,
         },
     }
+
+
+@app.get("/api/plans/{plan_id}/revisions/{number}/dossier")
+def decision_dossier(plan_id: str, number: int, who: IdentityDep,
+                     format: Literal["json", "pdf"] = "json"):
+    detail = plan_detail(plan_id, who)
+    revision = next((r for r in detail["revisions"] if r.get("revision", 1) == number), None)
+    if revision is None:
+        raise HTTPException(404, "Revision not found")
+    snapshot = revision.get("historical_assessment")
+    frozen_plan = {k:v for k,v in revision.items() if k != "historical_assessment"}
+    data = {
+        "title": dossier.TITLE,
+        "schema_version": 1,
+        "frozen_revision": {
+            "plan": frozen_plan,
+            "snapshot": snapshot,
+            "revision_history": [{k:r.get(k) for k in
+                ("id", "revision", "revision_id", "name", "site", "lander", "summary", "created_at")}
+                for r in detail["revisions"] if r.get("revision", 1) <= number],
+            "consultations_at_filing": snapshot.get("consultations_at_filing") if snapshot else None,
+            "historical_policy": "Frozen at filing; missing legacy evidence is not reconstructed",
+        },
+        "current_coordination": {
+            **detail["coordination"],
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "visible_consultations": detail["notices"],
+            "events": detail["events"],
+            "scope": "Consultations visible to the requesting organization; live, not frozen revision approval",
+        },
+        "scientific_limits": dossier.LIMITS,
+    }
+    filename = f"PLUME-decision-{plan_id}-r{number}.{format}"
+    if format == "pdf":
+        content = dossier.pdf_bytes(data)
+        media = "application/pdf"
+    else:
+        content = json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2)
+        media = "application/json"
+    return Response(content=content, media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "private, no-store",
+    })
 
 
 @app.get("/api/plans/{plan_id}/events", response_model=list[EventOut])
